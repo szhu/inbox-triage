@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "lib": ["ES2019"],
+    "types": ["google-apps-script", "bun"],
+    "module": "preserve",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  }
+}

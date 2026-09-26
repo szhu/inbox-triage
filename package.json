@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/main.ts --outfile dist/main.js --target browser --no-bundle && cp appsscript.json dist/appsscript.json",
+    "push": "bun run build && clasp push --force"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/google-apps-script": "^1.0.94",
+    "typescript": "^6.0.3"
+  }
+}
