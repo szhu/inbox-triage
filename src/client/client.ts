@@ -256,6 +256,13 @@ function toggleThread(threadId: string, tr: HTMLElement) {
     .getThreadMessages(threadId);
 }
 
+// Plain-text email bodies (from GmailMessage.getPlainBody()) often carry
+// leading/trailing blank lines and long runs of blank lines left over from
+// their original HTML layout; trim those down to at most a paragraph break.
+function normalizeBody(body: string): string {
+  return body.replace(/[^\S\n]*\n(?:[^\S\n]*\n){2,}/g, "\n\n").trim();
+}
+
 function renderMessages(messages: any[], cell: HTMLElement) {
   cell.innerHTML = "";
   for (const m of messages) {
@@ -268,7 +275,11 @@ function renderMessages(messages: any[], cell: HTMLElement) {
         onclick: (btn) => toggleMessageRead(m.id, btn),
       }),
     );
-    const div = El({ tag: "div", class: "messages" }, header, m.body);
+    const div = El(
+      { tag: "div", class: "messages" },
+      header,
+      normalizeBody(m.body),
+    );
     cell.appendChild(div);
   }
 }
