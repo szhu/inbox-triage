@@ -3,6 +3,8 @@
 // to GmailApp etc., and shares nothing with this file at runtime). Talks to
 // the server only through google.script.run.
 
+import { El } from "./el";
+
 interface ScriptRunner {
   withSuccessHandler(callback: (value: any) => void): ScriptRunner;
   withFailureHandler(callback: (error: Error) => void): ScriptRunner;
@@ -31,19 +33,31 @@ function render(threads: any[]) {
   document.getElementById("status")!.textContent = threads.length + " threads";
   const tbody = document.querySelector("#threads tbody")!;
   for (const t of threads) {
-    const tr = document.createElement("tr");
-    tr.dataset.senderGroup = t.senderGroup;
-    tr.dataset.threadId = t.id;
-    tr.innerHTML =
-      "<td class='subject'></td><td></td><td></td><td class='actions'></td>";
-    tr.children[0].textContent = t.subject;
-    tr.children[1].textContent = new Date(t.date).toLocaleString();
-    tr.children[2].textContent = t.messageCount;
-    (tr.children[0] as HTMLElement).onclick = () => toggleThread(t.id, tr);
-    tr.children[3].append(
-      iconButton("archive", "Archive", () => archiveOne(t.id, tr)),
-      iconButton(t.isUnread ? "unread" : "read", "Toggle read", (btn) =>
-        toggleThreadRead(t.id, btn),
+    let tr: HTMLElement;
+    tr = El(
+      {
+        "tag": "tr",
+        "data-sender-group": t.senderGroup,
+        "data-thread-id": t.id,
+      },
+      El(
+        { tag: "td", class: "subject", onclick: () => toggleThread(t.id, tr) },
+        t.subject,
+      ),
+      El("td", new Date(t.date).toLocaleString()),
+      El("td", String(t.messageCount)),
+      El(
+        { tag: "td", class: "actions" },
+        IconButton({
+          icon: "archive",
+          title: "Archive",
+          onclick: () => archiveOne(t.id, tr),
+        }),
+        IconButton({
+          icon: t.isUnread ? "unread" : "read",
+          title: "Toggle read",
+          onclick: (btn) => toggleThreadRead(t.id, btn),
+        }),
       ),
     );
     tbody.appendChild(tr);
@@ -62,19 +76,26 @@ function renderSenders() {
     const inGroup = allThreads.filter((t) => t.senderGroup === group);
     const unread = inGroup.filter((t) => t.isUnread).length;
     const displayName = shortestName(inGroup);
-    const row = document.createElement("div");
-    row.className = "sender-row";
-    row.dataset.group = group;
-    row.innerHTML =
-      "<span class='sender-text'><span class='sender-display-name'></span><span class='sender-name'></span></span><span class='unread-count'></span>";
-    row.querySelector(".sender-display-name")!.textContent =
-      displayName || group;
-    row.querySelector(".sender-name")!.textContent = group;
-    row.children[1].textContent = unread ? String(unread) : "";
-    row.append(
-      iconButton("archive", "Archive all", (btn) => archiveSender(group, btn)),
+    let row: HTMLElement;
+    row = El(
+      {
+        "tag": "div",
+        "class": "sender-row",
+        "data-group": group,
+        "onclick": () => selectSender(group, row),
+      },
+      El(
+        { tag: "span", class: "sender-text" },
+        El({ tag: "span", class: "sender-display-name" }, displayName || group),
+        El({ tag: "span", class: "sender-name" }, group),
+      ),
+      El({ tag: "span", class: "unread-count" }, unread ? String(unread) : ""),
+      IconButton({
+        icon: "archive",
+        title: "Archive all",
+        onclick: (btn) => archiveSender(group, btn),
+      }),
     );
-    row.onclick = () => selectSender(group, row);
     senderList.appendChild(row);
   }
   const toSelect =
@@ -95,19 +116,26 @@ function shortestName(threads: any[]): string {
     : "";
 }
 
-function iconButton(
-  icon: keyof typeof ICONS,
-  title: string,
-  onClick: (btn: HTMLButtonElement) => void,
-) {
-  const btn = document.createElement("button");
-  btn.className = "icon-btn";
+function IconButton({
+  icon,
+  title,
+  onclick,
+}: {
+  icon: keyof typeof ICONS;
+  title: string;
+  onclick: (btn: HTMLButtonElement) => void;
+}): HTMLButtonElement {
+  let btn: HTMLButtonElement;
+  btn = El({
+    tag: "button",
+    class: "icon-btn",
+    title,
+    onclick: (e: Event) => {
+      e.stopPropagation();
+      onclick(btn);
+    },
+  }) as HTMLButtonElement;
   btn.innerHTML = ICONS[icon];
-  btn.title = title;
-  btn.onclick = (e) => {
-    e.stopPropagation();
-    onClick(btn);
-  };
   return btn;
 }
 
@@ -130,12 +158,8 @@ function toggleThread(threadId: string, tr: HTMLElement) {
     return;
   }
   document.querySelectorAll("tr[data-messages-for]").forEach((r) => r.remove());
-  const row = document.createElement("tr");
-  row.dataset.messagesFor = threadId;
-  const cell = document.createElement("td");
-  cell.colSpan = 4;
-  cell.textContent = "Loading...";
-  row.appendChild(cell);
+  const cell = El({ tag: "td", colspan: "4" }, "Loading...");
+  const row = El({ "tag": "tr", "data-messages-for": threadId }, cell);
   tr.after(row);
   google.script.run
     .withSuccessHandler((messages: any[]) => renderMessages(messages, cell))
@@ -146,19 +170,16 @@ function toggleThread(threadId: string, tr: HTMLElement) {
 function renderMessages(messages: any[], cell: HTMLElement) {
   cell.innerHTML = "";
   for (const m of messages) {
-    const div = document.createElement("div");
-    div.className = "messages";
-    const header = document.createElement("div");
-    header.className = "message-header";
-    header.innerHTML = "<span></span>";
-    header.children[0].textContent =
-      m.from + " · " + new Date(m.date).toLocaleString();
-    header.append(
-      iconButton(m.isUnread ? "unread" : "read", "Toggle read", (btn) =>
-        toggleMessageRead(m.id, btn),
-      ),
+    const header = El(
+      { tag: "div", class: "message-header" },
+      El("span", m.from + " · " + new Date(m.date).toLocaleString()),
+      IconButton({
+        icon: m.isUnread ? "unread" : "read",
+        title: "Toggle read",
+        onclick: (btn) => toggleMessageRead(m.id, btn),
+      }),
     );
-    div.append(header, document.createTextNode(m.body));
+    const div = El({ tag: "div", class: "messages" }, header, m.body);
     cell.appendChild(div);
   }
 }

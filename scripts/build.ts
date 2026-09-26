@@ -13,20 +13,22 @@ import { readdir } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url).pathname;
 
-async function buildFile(entry: string, outfile: string) {
-  const proc = Bun.spawn(
-    [
-      "bun",
-      "build",
-      entry,
-      "--outfile",
-      outfile,
-      "--target",
-      "browser",
-      "--no-bundle",
-    ],
-    { cwd: root, stdout: "inherit", stderr: "inherit" },
-  );
+async function buildFile(entry: string, outfile: string, bundle: boolean) {
+  const args = [
+    "bun",
+    "build",
+    entry,
+    "--outfile",
+    outfile,
+    "--target",
+    "browser",
+  ];
+  if (!bundle) args.push("--no-bundle");
+  const proc = Bun.spawn(args, {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
   if ((await proc.exited) !== 0) throw new Error(`Failed to build ${entry}`);
 }
 
@@ -34,10 +36,15 @@ const serverFiles = (await readdir(`${root}src/server`)).filter((f) =>
   f.endsWith(".ts"),
 );
 for (const file of serverFiles) {
-  await buildFile(`src/server/${file}`, `dist/${file.replace(/\.ts$/, ".js")}`);
+  await buildFile(
+    `src/server/${file}`,
+    `dist/${file.replace(/\.ts$/, ".js")}`,
+    false,
+  );
 }
 
-await buildFile("src/client/client.ts", ".build/client.js");
+// Bundled (not --no-bundle), since client.ts imports from el.ts.
+await buildFile("src/client/client.ts", ".build/client.js", true);
 const clientJs = await Bun.file(`${root}.build/client.js`).text();
 const mainJs = await Bun.file(`${root}dist/main.js`).text();
 // main.js's PAGE_HTML is itself a backtick template literal, so the spliced
