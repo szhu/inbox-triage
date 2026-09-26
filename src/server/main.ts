@@ -2,8 +2,8 @@ function doGet() {
   return HtmlService.createHtmlOutput(PAGE_HTML).setTitle("Inbox triage");
 }
 
-function listInboxThreads() {
-  const threads = GmailApp.search("in:inbox", 0, 50);
+function listInboxThreads(start: number) {
+  const threads = GmailApp.search("in:inbox", start, 50);
   return threads.map((t) => {
     const sender = t.getMessages()[0]?.getFrom() ?? "";
     const senderGroup = groupForSender(sender);

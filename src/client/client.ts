@@ -43,7 +43,10 @@ const ICONS = {
     '<svg viewBox="0 0 16 16"><path d="M8 2l1.8 3.9 4.2.5-3.1 3 .8 4.3L8 11.6 4.3 13.7l.8-4.3-3.1-3 4.2-.5z" fill="none" stroke="currentColor"/></svg>',
 };
 
+const PAGE_SIZE = 50;
 let allThreads: any[] = [];
+let reachedEndOfInbox = false;
+let loadingMore = false;
 refresh();
 
 document
@@ -52,55 +55,84 @@ document
     IconButton({ icon: "refresh", title: "Refresh", onclick: refresh }),
   );
 
+document.getElementById("main")!.addEventListener("scroll", maybeLoadMore);
+
 function refresh() {
+  reachedEndOfInbox = false;
   google.script.run
-    .withSuccessHandler(render)
+    .withSuccessHandler((threads: any[]) => {
+      allThreads = threads;
+      reachedEndOfInbox = threads.length < PAGE_SIZE;
+      render();
+    })
     .withFailureHandler(fail)
-    .listInboxThreads();
+    .listInboxThreads(0);
 }
 
-function render(threads: any[]) {
-  allThreads = threads;
-  document.getElementById("status")!.textContent = threads.length + " threads";
+function maybeLoadMore() {
+  if (loadingMore || reachedEndOfInbox) return;
+  const main = document.getElementById("main")!;
+  if (main.scrollTop + main.clientHeight < main.scrollHeight - 200) return;
+  loadingMore = true;
+  google.script.run
+    .withSuccessHandler((threads: any[]) => {
+      loadingMore = false;
+      reachedEndOfInbox = threads.length < PAGE_SIZE;
+      allThreads = allThreads.concat(threads);
+      render();
+    })
+    .withFailureHandler((error: Error) => {
+      loadingMore = false;
+      fail(error);
+    })
+    .listInboxThreads(allThreads.length);
+}
+
+function buildRow(t: any): HTMLElement {
+  let tr: HTMLElement;
+  tr = El(
+    {
+      "tag": "tr",
+      "data-sender-group": t.senderGroup,
+      "data-thread-id": t.id,
+    },
+    El(
+      { tag: "td", class: "subject", onclick: () => toggleThread(t.id, tr) },
+      t.subject,
+    ),
+    El("td", new Date(t.date).toLocaleString()),
+    El("td", String(t.messageCount)),
+    El(
+      { tag: "td", class: "actions" },
+      IconButton({
+        icon: "archive",
+        title: "Archive",
+        onclick: (btn) => archiveOne(t.id, tr, btn),
+      }),
+      IconButton({
+        icon: t.isUnread ? "unread" : "read",
+        title: "Toggle read",
+        onclick: (btn) => toggleThreadRead(t.id, btn),
+      }),
+      IconButton({
+        icon: t.isStarred ? "star" : "unstar",
+        title: "Toggle star",
+        onclick: (btn) => toggleThreadStarred(t.id, btn),
+      }),
+    ),
+  );
+  return tr;
+}
+
+function render() {
+  document.getElementById("status")!.textContent =
+    allThreads.length + " threads";
   const tbody = document.querySelector("#threads tbody")!;
   tbody.innerHTML = "";
-  for (const t of threads) {
-    let tr: HTMLElement;
-    tr = El(
-      {
-        "tag": "tr",
-        "data-sender-group": t.senderGroup,
-        "data-thread-id": t.id,
-      },
-      El(
-        { tag: "td", class: "subject", onclick: () => toggleThread(t.id, tr) },
-        t.subject,
-      ),
-      El("td", new Date(t.date).toLocaleString()),
-      El("td", String(t.messageCount)),
-      El(
-        { tag: "td", class: "actions" },
-        IconButton({
-          icon: "archive",
-          title: "Archive",
-          onclick: (btn) => archiveOne(t.id, tr, btn),
-        }),
-        IconButton({
-          icon: t.isUnread ? "unread" : "read",
-          title: "Toggle read",
-          onclick: (btn) => toggleThreadRead(t.id, btn),
-        }),
-        IconButton({
-          icon: t.isStarred ? "star" : "unstar",
-          title: "Toggle star",
-          onclick: (btn) => toggleThreadStarred(t.id, btn),
-        }),
-      ),
-    );
-    tbody.appendChild(tr);
-  }
+  for (const t of allThreads) tbody.appendChild(buildRow(t));
   document.getElementById("threads")!.hidden = false;
   renderSenders();
+  maybeLoadMore();
 }
 
 function renderSenders() {
