@@ -57,19 +57,22 @@ const PAGE_HTML = `<!DOCTYPE html>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; display: flex; height: 100vh; }
     h1 { font-size: 1.1rem; margin: 0.8rem; }
-    button { font: inherit; cursor: pointer; }
+    button.icon-btn { font: inherit; cursor: pointer; width: 1.6rem; height: 1.6rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #ccc; border-radius: 3px; background: #fff; }
+    button.icon-btn:hover { background: #f0f0f0; }
+    button.icon-btn svg { width: 14px; height: 14px; }
     #senders { width: 340px; overflow-y: auto; border-right: 1px solid #ddd; flex-shrink: 0; }
     #senders .sender-row { display: flex; align-items: center; padding: 0.5rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-bottom: 1px solid #eee; white-space: nowrap; }
     #senders .sender-row:hover { background: #f5f5f5; }
     #senders .sender-row.selected { background: #e8f0fe; font-weight: 600; }
     #senders .sender-name { overflow: hidden; text-overflow: ellipsis; flex: 1; }
-    #senders .unread-count { color: #666; margin-left: 0.5rem; }
-    #senders .sender-archive { margin-left: 0.5rem; }
+    #senders .unread-count { color: #666; margin-left: 0.5rem; min-width: 1.2rem; text-align: right; }
+    #senders .icon-btn { margin-left: 0.5rem; }
     .archived { opacity: 0.35; }
     #main { flex: 1; overflow-y: auto; }
     table { border-collapse: collapse; width: 100%; table-layout: fixed; }
     th, td { text-align: left; padding: 0.4rem 0.8rem; border-bottom: 1px solid #ddd; font-size: 0.9rem; vertical-align: top; }
     td.actions { white-space: nowrap; }
+    td.actions .icon-btn + .icon-btn { margin-left: 0.3rem; }
     th { color: #666; font-weight: 600; }
     td.subject { cursor: pointer; }
     #status { color: #666; margin: 0.8rem; }
@@ -89,6 +92,13 @@ const PAGE_HTML = `<!DOCTYPE html>
     </table>
   </div>
   <script>
+    const ICONS = {
+      archive: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="3" fill="none" stroke="currentColor"/><path d="M3 6h10v7H3z" fill="none" stroke="currentColor"/><path d="M6.5 8.5h3M8 8.5v3M6.5 10l1.5 1.5L9.5 10" fill="none" stroke="currentColor"/></svg>',
+      unarchive: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="3" fill="none" stroke="currentColor"/><path d="M3 6h10v7H3z" fill="none" stroke="currentColor"/><path d="M6.5 11.5h3M8 11.5v-3M6.5 10l1.5-1.5L9.5 10" fill="none" stroke="currentColor"/></svg>',
+      unread: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="currentColor"/></svg>',
+      read: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="none" stroke="currentColor"/></svg>',
+    };
+
     let allThreads = [];
     google.script.run.withSuccessHandler(render).withFailureHandler(fail).listInboxThreads();
 
@@ -106,8 +116,8 @@ const PAGE_HTML = `<!DOCTYPE html>
         tr.children[2].textContent = t.messageCount;
         tr.children[0].onclick = () => toggleThread(t.id, tr);
         tr.children[3].append(
-          button("Archive", () => archiveOne(t.id, tr)),
-          button(t.isUnread ? "Mark read" : "Mark unread", (btn) => toggleThreadRead(t.id, btn)),
+          iconButton("archive", "Archive", () => archiveOne(t.id, tr)),
+          iconButton(t.isUnread ? "unread" : "read", "Toggle read", (btn) => toggleThreadRead(t.id, btn)),
         );
         tbody.appendChild(tr);
       }
@@ -127,7 +137,7 @@ const PAGE_HTML = `<!DOCTYPE html>
         row.innerHTML = "<span class='sender-name'></span><span class='unread-count'></span>";
         row.children[0].textContent = sender;
         row.children[1].textContent = unread || "";
-        row.append(button("Archive", (btn) => archiveSender(sender, btn), "sender-archive"));
+        row.append(iconButton("archive", "Archive all", (btn) => archiveSender(sender, btn)));
         row.onclick = () => selectSender(sender, row);
         senderList.appendChild(row);
       }
@@ -135,10 +145,11 @@ const PAGE_HTML = `<!DOCTYPE html>
       if (toSelect) selectSender(toSelect.querySelector(".sender-name").textContent, toSelect);
     }
 
-    function button(label, onClick, extraClass) {
+    function iconButton(icon, title, onClick) {
       const btn = document.createElement("button");
-      btn.textContent = label;
-      if (extraClass) btn.className = extraClass;
+      btn.className = "icon-btn";
+      btn.innerHTML = ICONS[icon];
+      btn.title = title;
       btn.onclick = (e) => { e.stopPropagation(); onClick(btn); };
       return btn;
     }
@@ -177,7 +188,7 @@ const PAGE_HTML = `<!DOCTYPE html>
         header.className = "message-header";
         header.innerHTML = "<span></span>";
         header.children[0].textContent = m.from + " · " + new Date(m.date).toLocaleString();
-        header.append(button(m.isUnread ? "Mark read" : "Mark unread", (btn) => toggleMessageRead(m.id, btn)));
+        header.append(iconButton(m.isUnread ? "unread" : "read", "Toggle read", (btn) => toggleMessageRead(m.id, btn)));
         div.append(header, document.createTextNode(m.body));
         cell.appendChild(div);
       }
@@ -205,14 +216,14 @@ const PAGE_HTML = `<!DOCTYPE html>
       const nowRead = t.isUnread;
       google.script.run.withFailureHandler(fail).markThreadRead(threadId, nowRead);
       t.isUnread = !nowRead;
-      btn.textContent = t.isUnread ? "Mark read" : "Mark unread";
+      btn.innerHTML = ICONS[t.isUnread ? "unread" : "read"];
       renderSenders();
     }
 
     function toggleMessageRead(messageId, btn) {
-      const nowRead = btn.textContent === "Mark read";
+      const nowRead = btn.innerHTML === ICONS.unread;
       google.script.run.withFailureHandler(fail).markMessageRead(messageId, nowRead);
-      btn.textContent = nowRead ? "Mark unread" : "Mark read";
+      btn.innerHTML = ICONS[nowRead ? "read" : "unread"];
     }
 
     function fail(error) {
