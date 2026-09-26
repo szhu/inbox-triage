@@ -20,18 +20,31 @@ const ICONS = {
   unread:
     '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="currentColor"/></svg>',
   read: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="none" stroke="currentColor"/></svg>',
+  refresh:
+    '<svg viewBox="0 0 16 16"><path d="M3 8a5 5 0 0 1 8.5-3.5M13 8a5 5 0 0 1-8.5 3.5" fill="none" stroke="currentColor"/><path d="M11 2v3h-3M5 14v-3h3" fill="none" stroke="currentColor"/></svg>',
 };
 
 let allThreads: any[] = [];
-google.script.run
-  .withSuccessHandler(render)
-  .withFailureHandler(fail)
-  .listInboxThreads();
+refresh();
+
+document
+  .getElementById("topbar")!
+  .appendChild(
+    IconButton({ icon: "refresh", title: "Refresh", onclick: refresh }),
+  );
+
+function refresh() {
+  google.script.run
+    .withSuccessHandler(render)
+    .withFailureHandler(fail)
+    .listInboxThreads();
+}
 
 function render(threads: any[]) {
   allThreads = threads;
   document.getElementById("status")!.textContent = threads.length + " threads";
   const tbody = document.querySelector("#threads tbody")!;
+  tbody.innerHTML = "";
   for (const t of threads) {
     let tr: HTMLElement;
     tr = El(

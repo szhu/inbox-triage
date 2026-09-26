@@ -90,11 +90,14 @@ const PAGE_HTML = `<!DOCTYPE html>
 <head>
   <base target="_top">
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; display: flex; height: 100vh; }
-    h1 { font-size: 1.1rem; margin: 0.8rem; }
+    body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; display: flex; flex-direction: column; height: 100vh; }
     button.icon-btn { font: inherit; cursor: pointer; width: 1.6rem; height: 1.6rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #ccc; border-radius: 3px; background: #fff; }
     button.icon-btn:hover { background: #f0f0f0; }
     button.icon-btn svg { width: 14px; height: 14px; }
+    #topbar { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; border-bottom: 1px solid #ddd; flex-shrink: 0; }
+    #topbar h1 { font-size: 1.1rem; margin: 0; }
+    #topbar #status { color: #666; flex: 1; }
+    #body { display: flex; flex: 1; overflow: hidden; }
     #senders { width: 340px; overflow-y: auto; border-right: 1px solid #ddd; flex-shrink: 0; }
     #senders .sender-row { display: flex; align-items: center; padding: 0.5rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-bottom: 1px solid #eee; white-space: nowrap; }
     #senders .sender-row:hover { background: #f5f5f5; }
@@ -112,21 +115,24 @@ const PAGE_HTML = `<!DOCTYPE html>
     td.actions .icon-btn + .icon-btn { margin-left: 0.3rem; }
     th { color: #666; font-weight: 600; }
     td.subject { cursor: pointer; }
-    #status { color: #666; margin: 0.8rem; }
     tr.hidden-row { display: none; }
     .messages { white-space: pre-wrap; overflow-x: auto; font-size: 0.85rem; background: #fafafa; padding: 0.6rem; margin: 0.3rem 0; border-radius: 4px; }
     .message-header { display: flex; justify-content: space-between; color: #666; font-size: 0.8rem; margin-bottom: 0.3rem; }
   </style>
 </head>
 <body>
-  <div id="senders"></div>
-  <div id="main">
+  <div id="topbar">
     <h1>Inbox triage</h1>
     <div id="status">Loading...</div>
-    <table id="threads" hidden>
-      <thead><tr><th>Subject</th><th>Date</th><th>#</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table>
+  </div>
+  <div id="body">
+    <div id="senders"></div>
+    <div id="main">
+      <table id="threads" hidden>
+        <thead><tr><th>Subject</th><th>Date</th><th>#</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
   <script>
     __CLIENT_JS__
