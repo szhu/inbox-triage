@@ -2,7 +2,8 @@
   "type": "module",
   "scripts": {
     "build": "bun scripts/build.ts",
-    "format": "prettier --write .",
+    "lint": "tsc -p scripts && tsc -p src/server && tsc -p src/client && prettier --check .",
+    "lint:fix": "tsc -p scripts && tsc -p src/server && tsc -p src/client && prettier --write .",
     "push": "bun run build && clasp push --force"
   },
   "devDependencies": {
