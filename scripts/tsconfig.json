@@ -1,9 +1,9 @@
 {
-  "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2019"],
-    "types": ["bun", "node"],
-    "module": "preserve"
+    "module": "preserve",
+    "types": ["bun", "node"]
   },
+  "extends": "../tsconfig.base.json",
   "include": ["build.ts"]
 }

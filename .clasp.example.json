@@ -1,16 +1,9 @@
 {
-  "scriptId": "YOUR_SCRIPT_ID_HERE",
-  "rootDir": "dist",
-  "scriptExtensions": [
-    ".js",
-    ".gs"
-  ],
-  "htmlExtensions": [
-    ".html"
-  ],
-  "jsonExtensions": [
-    ".json"
-  ],
   "filePushOrder": [],
+  "htmlExtensions": [".html"],
+  "jsonExtensions": [".json"],
+  "rootDir": "dist",
+  "scriptExtensions": [".js", ".gs"],
+  "scriptId": "YOUR_SCRIPT_ID_HERE",
   "skipSubdirectories": false
 }

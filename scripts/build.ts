@@ -15,13 +15,24 @@ const root = new URL("..", import.meta.url).pathname;
 
 async function buildFile(entry: string, outfile: string) {
   const proc = Bun.spawn(
-    ["bun", "build", entry, "--outfile", outfile, "--target", "browser", "--no-bundle"],
+    [
+      "bun",
+      "build",
+      entry,
+      "--outfile",
+      outfile,
+      "--target",
+      "browser",
+      "--no-bundle",
+    ],
     { cwd: root, stdout: "inherit", stderr: "inherit" },
   );
   if ((await proc.exited) !== 0) throw new Error(`Failed to build ${entry}`);
 }
 
-const serverFiles = (await readdir(`${root}src/server`)).filter((f) => f.endsWith(".ts"));
+const serverFiles = (await readdir(`${root}src/server`)).filter((f) =>
+  f.endsWith(".ts"),
+);
 for (const file of serverFiles) {
   await buildFile(`src/server/${file}`, `dist/${file.replace(/\.ts$/, ".js")}`);
 }
@@ -33,7 +44,16 @@ const mainJs = await Bun.file(`${root}dist/main.js`).text();
 // text must be escaped as if it were going inside one (JSON.stringify's
 // escaping is for double-quoted strings, not backtick literals, so it can't
 // be used here as-is).
-const escapedClientJs = clientJs.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
-await Bun.write(`${root}dist/main.js`, mainJs.replace("__CLIENT_JS__", () => escapedClientJs));
+const escapedClientJs = clientJs
+  .replace(/\\/g, "\\\\")
+  .replace(/`/g, "\\`")
+  .replace(/\$\{/g, "\\${");
+await Bun.write(
+  `${root}dist/main.js`,
+  mainJs.replace("__CLIENT_JS__", () => escapedClientJs),
+);
 
-await Bun.write(`${root}dist/appsscript.json`, Bun.file(`${root}appsscript.json`));
+await Bun.write(
+  `${root}dist/appsscript.json`,
+  Bun.file(`${root}appsscript.json`),
+);

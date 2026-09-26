@@ -25,7 +25,9 @@ function senderDisplayName(sender: string): string {
   const match = sender.match(/^"?([^"<]*?)"?\s*<([^>]+)>$/);
   if (!match) return "";
   const [, name, address] = match;
-  return name.trim().toLowerCase() === address.trim().toLowerCase() ? "" : name.trim();
+  return name.trim().toLowerCase() === address.trim().toLowerCase()
+    ? ""
+    : name.trim();
 }
 
 // Groups a sender by organization: a public email address (gmail.com, etc.)
