@@ -60,8 +60,9 @@ function getThreadMessages(threadId: string) {
   }));
 }
 
-function archiveThread(threadId: string) {
-  GmailApp.getThreadById(threadId).moveToArchive();
+function setThreadArchived(threadId: string, archived: boolean) {
+  const thread = GmailApp.getThreadById(threadId);
+  archived ? thread.moveToArchive() : thread.moveToInbox();
 }
 
 function archiveThreads(threadIds: string[]) {
@@ -94,6 +95,8 @@ const PAGE_HTML = `<!DOCTYPE html>
     button.icon-btn { font: inherit; cursor: pointer; width: 1.6rem; height: 1.6rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #ccc; border-radius: 3px; background: #fff; }
     button.icon-btn:hover { background: #f0f0f0; }
     button.icon-btn svg { width: 14px; height: 14px; }
+    button.icon-btn.pending { animation: pending-pulse 0.8s ease-in-out infinite; }
+    @keyframes pending-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     #topbar { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; border-bottom: 1px solid #ddd; flex-shrink: 0; }
     #topbar h1 { font-size: 1.1rem; margin: 0; }
     #topbar #status { color: #666; flex: 1; }

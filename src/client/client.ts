@@ -12,6 +12,22 @@ interface ScriptRunner {
 }
 declare const google: { script: { run: ScriptRunner } };
 
+// Marks el as pending (via a CSS class) for the duration of a server call,
+// so in-flight vs. completed is visible without any per-call bookkeeping.
+function withPending(
+  el: HTMLElement,
+  onSuccess?: (value: any) => void,
+): ScriptRunner {
+  el.classList.add("pending");
+  const settle = (handler?: (value: any) => void) => (value: any) => {
+    el.classList.remove("pending");
+    handler?.(value);
+  };
+  return google.script.run
+    .withSuccessHandler(settle(onSuccess))
+    .withFailureHandler(settle(fail));
+}
+
 const ICONS = {
   archive:
     '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="3" fill="none" stroke="currentColor"/><path d="M3 6h10v7H3z" fill="none" stroke="currentColor"/><path d="M6.5 8.5h3M8 8.5v3M6.5 10l1.5 1.5L9.5 10" fill="none" stroke="currentColor"/></svg>',
@@ -64,7 +80,7 @@ function render(threads: any[]) {
         IconButton({
           icon: "archive",
           title: "Archive",
-          onclick: () => archiveOne(t.id, tr),
+          onclick: (btn) => archiveOne(t.id, tr, btn),
         }),
         IconButton({
           icon: t.isUnread ? "unread" : "read",
@@ -197,10 +213,13 @@ function renderMessages(messages: any[], cell: HTMLElement) {
   }
 }
 
-function archiveOne(threadId: string, tr: HTMLElement) {
-  google.script.run.withFailureHandler(fail).archiveThread(threadId);
-  allThreads.find((t) => t.id === threadId).archived = true;
-  tr.classList.add("archived");
+function archiveOne(threadId: string, tr: HTMLElement, btn: HTMLElement) {
+  const t = allThreads.find((t) => t.id === threadId);
+  const nowArchived = !t.archived;
+  withPending(btn).setThreadArchived(threadId, nowArchived);
+  t.archived = nowArchived;
+  tr.classList.toggle("archived", nowArchived);
+  btn.innerHTML = ICONS[nowArchived ? "unarchive" : "archive"];
   renderSenders();
 }
 
@@ -208,9 +227,7 @@ function archiveSender(group: string, btn: HTMLElement) {
   const toArchive = allThreads.filter(
     (t) => t.senderGroup === group && !t.archived,
   );
-  google.script.run
-    .withFailureHandler(fail)
-    .archiveThreads(toArchive.map((t) => t.id));
+  withPending(btn).archiveThreads(toArchive.map((t) => t.id));
   for (const t of toArchive) {
     t.archived = true;
     document
@@ -223,7 +240,7 @@ function archiveSender(group: string, btn: HTMLElement) {
 function toggleThreadRead(threadId: string, btn: HTMLButtonElement) {
   const t = allThreads.find((t) => t.id === threadId);
   const nowRead = t.isUnread;
-  google.script.run.withFailureHandler(fail).markThreadRead(threadId, nowRead);
+  withPending(btn).markThreadRead(threadId, nowRead);
   t.isUnread = !nowRead;
   btn.innerHTML = ICONS[t.isUnread ? "unread" : "read"];
   renderSenders();
@@ -231,9 +248,7 @@ function toggleThreadRead(threadId: string, btn: HTMLButtonElement) {
 
 function toggleMessageRead(messageId: string, btn: HTMLButtonElement) {
   const nowRead = btn.innerHTML === ICONS.unread;
-  google.script.run
-    .withFailureHandler(fail)
-    .markMessageRead(messageId, nowRead);
+  withPending(btn).markMessageRead(messageId, nowRead);
   btn.innerHTML = ICONS[nowRead ? "read" : "unread"];
 }
 
