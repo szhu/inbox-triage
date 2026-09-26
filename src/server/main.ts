@@ -15,6 +15,7 @@ function listInboxThreads() {
       date: t.getLastMessageDate().toISOString(),
       messageCount: t.getMessageCount(),
       isUnread: t.isUnread(),
+      isStarred: t.hasStarredMessages(),
     };
   });
 }
@@ -63,6 +64,11 @@ function getThreadMessages(threadId: string) {
 function setThreadArchived(threadId: string, archived: boolean) {
   const thread = GmailApp.getThreadById(threadId);
   archived ? thread.moveToArchive() : thread.moveToInbox();
+}
+
+function setThreadStarred(threadId: string, starred: boolean) {
+  const messages = GmailApp.getThreadById(threadId).getMessages();
+  starred ? GmailApp.starMessages(messages) : GmailApp.unstarMessages(messages);
 }
 
 function archiveThreads(threadIds: string[]) {

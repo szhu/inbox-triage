@@ -38,6 +38,9 @@ const ICONS = {
   read: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="4" fill="none" stroke="currentColor"/></svg>',
   refresh:
     '<svg viewBox="0 0 16 16"><path d="M3 8a5 5 0 0 1 8.5-3.5M13 8a5 5 0 0 1-8.5 3.5" fill="none" stroke="currentColor"/><path d="M11 2v3h-3M5 14v-3h3" fill="none" stroke="currentColor"/></svg>',
+  star: '<svg viewBox="0 0 16 16"><path d="M8 2l1.8 3.9 4.2.5-3.1 3 .8 4.3L8 11.6 4.3 13.7l.8-4.3-3.1-3 4.2-.5z" fill="currentColor"/></svg>',
+  unstar:
+    '<svg viewBox="0 0 16 16"><path d="M8 2l1.8 3.9 4.2.5-3.1 3 .8 4.3L8 11.6 4.3 13.7l.8-4.3-3.1-3 4.2-.5z" fill="none" stroke="currentColor"/></svg>',
 };
 
 let allThreads: any[] = [];
@@ -86,6 +89,11 @@ function render(threads: any[]) {
           icon: t.isUnread ? "unread" : "read",
           title: "Toggle read",
           onclick: (btn) => toggleThreadRead(t.id, btn),
+        }),
+        IconButton({
+          icon: t.isStarred ? "star" : "unstar",
+          title: "Toggle star",
+          onclick: (btn) => toggleThreadStarred(t.id, btn),
         }),
       ),
     );
@@ -244,6 +252,14 @@ function toggleThreadRead(threadId: string, btn: HTMLButtonElement) {
   t.isUnread = !nowRead;
   btn.innerHTML = ICONS[t.isUnread ? "unread" : "read"];
   renderSenders();
+}
+
+function toggleThreadStarred(threadId: string, btn: HTMLButtonElement) {
+  const t = allThreads.find((t) => t.id === threadId);
+  const nowStarred = !t.isStarred;
+  withPending(btn).setThreadStarred(threadId, nowStarred);
+  t.isStarred = nowStarred;
+  btn.innerHTML = ICONS[nowStarred ? "star" : "unstar"];
 }
 
 function toggleMessageRead(messageId: string, btn: HTMLButtonElement) {
