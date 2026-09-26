@@ -132,18 +132,43 @@ const PAGE_HTML = `<!DOCTYPE html>
     #senders .icon-btn { margin-left: 0.5rem; }
     .archived { opacity: 0.35; }
     #main { flex: 1; overflow-y: auto; }
-    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-    th, td { text-align: left; padding: 0.4rem 0.8rem; border-bottom: 1px solid #ddd; font-size: 0.9rem; vertical-align: top; }
-    th:nth-child(2), td:nth-child(2) { width: 7rem; }
-    th:nth-child(3), td:nth-child(3) { width: 2.5rem; }
-    th:last-child, td.actions { width: 6.5rem; }
-    td.actions { white-space: nowrap; }
-    td.actions .icon-btn + .icon-btn { margin-left: 0.3rem; }
-    th { color: #666; font-weight: 600; }
-    td.subject { cursor: pointer; }
-    tr.hidden-row { display: none; }
+    #threads .header { display: none; }
+    #threads .row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas: "subject subject" "date actions";
+      gap: 0.2rem 0.8rem;
+      padding: 0.4rem 0.8rem;
+      border-bottom: 1px solid #ddd;
+      font-size: 0.9rem;
+    }
+    #threads .cell { text-align: left; }
+    #threads .subject { grid-area: subject; cursor: pointer; }
+    #threads .date { grid-area: date; color: #666; font-size: 0.8rem; align-self: center; }
+    #threads .count { display: none; }
+    #threads .actions { grid-area: actions; white-space: nowrap; }
+    #threads .actions .icon-btn + .icon-btn { margin-left: 0.3rem; }
+    #threads .row.hidden-row { display: none; }
+    #threads .messages-row { display: block; }
     .messages { white-space: pre-wrap; overflow-x: auto; font-size: 0.85rem; background: #fafafa; padding: 0.6rem; margin: 0.3rem 0; border-radius: 4px; }
     .message-header { display: flex; justify-content: space-between; color: #666; font-size: 0.8rem; margin-bottom: 0.3rem; }
+    @media (min-width: 700px) {
+      #threads .header {
+        display: grid;
+        grid-template-columns: 1fr 7rem 2.5rem 6.5rem;
+        color: #666;
+        font-weight: 600;
+        padding: 0.4rem 0.8rem;
+        border-bottom: 1px solid #ddd;
+        font-size: 0.9rem;
+      }
+      #threads .row {
+        grid-template-columns: 1fr 7rem 2.5rem 6.5rem;
+        grid-template-areas: "subject date count actions";
+        align-items: center;
+      }
+      #threads .count { display: block; }
+    }
   </style>
 </head>
 <body>
@@ -154,10 +179,10 @@ const PAGE_HTML = `<!DOCTYPE html>
   <div id="body">
     <div id="senders"></div>
     <div id="main">
-      <table id="threads" hidden>
-        <thead><tr><th>Subject</th><th>Date</th><th>#</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
+      <div id="threads" hidden>
+        <div class="header"><span>Subject</span><span>Date</span><span>#</span><span></span></div>
+        <div class="rows"></div>
+      </div>
     </div>
   </div>
   <script>

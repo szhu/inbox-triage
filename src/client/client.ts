@@ -89,19 +89,24 @@ function maybeLoadMore() {
 }
 
 function buildRow(t: any): HTMLElement {
-  let tr: HTMLElement;
-  tr = El(
+  let row: HTMLElement;
+  row = El(
     {
-      "tag": "tr",
+      "tag": "div",
+      "class": "row",
       "data-sender-group": t.senderGroup,
       "data-thread-id": t.id,
     },
     El(
-      { tag: "td", class: "subject", onclick: () => toggleThread(t.id, tr) },
+      {
+        tag: "span",
+        class: "cell subject",
+        onclick: () => toggleThread(t.id, row),
+      },
       t.subject,
     ),
     El(
-      "td",
+      { tag: "span", class: "cell date" },
       new Date(t.date).toLocaleDateString(undefined, {
         month: "numeric",
         day: "numeric",
@@ -109,13 +114,13 @@ function buildRow(t: any): HTMLElement {
         minute: "2-digit",
       }),
     ),
-    El("td", String(t.messageCount)),
+    El({ tag: "span", class: "cell count" }, String(t.messageCount)),
     El(
-      { tag: "td", class: "actions" },
+      { tag: "span", class: "cell actions" },
       IconButton({
         icon: "archive",
         title: "Archive",
-        onclick: (btn) => archiveOne(t.id, tr, btn),
+        onclick: (btn) => archiveOne(t.id, row, btn),
       }),
       IconButton({
         icon: t.isUnread ? "unread" : "read",
@@ -129,15 +134,15 @@ function buildRow(t: any): HTMLElement {
       }),
     ),
   );
-  return tr;
+  return row;
 }
 
 function render() {
   document.getElementById("status")!.textContent =
     allThreads.length + " threads";
-  const tbody = document.querySelector("#threads tbody")!;
-  tbody.innerHTML = "";
-  for (const t of allThreads) tbody.appendChild(buildRow(t));
+  const rows = document.querySelector("#threads .rows")!;
+  rows.innerHTML = "";
+  for (const t of allThreads) rows.appendChild(buildRow(t));
   document.getElementById("threads")!.hidden = false;
   renderSenders();
   maybeLoadMore();
@@ -221,10 +226,10 @@ function selectSender(group: string, el: HTMLElement) {
     .querySelectorAll("#senders .selected")
     .forEach((d) => d.classList.remove("selected"));
   el.classList.add("selected");
-  for (const tr of document.querySelectorAll<HTMLElement>(
-    "#threads tbody tr",
+  for (const row of document.querySelectorAll<HTMLElement>(
+    "#threads .rows > .row",
   )) {
-    tr.classList.toggle("hidden-row", tr.dataset.senderGroup !== group);
+    row.classList.toggle("hidden-row", row.dataset.senderGroup !== group);
   }
 }
 
@@ -234,9 +239,16 @@ function toggleThread(threadId: string, tr: HTMLElement) {
     existing.remove();
     return;
   }
-  document.querySelectorAll("tr[data-messages-for]").forEach((r) => r.remove());
-  const cell = El({ tag: "td", colspan: "4" }, "Loading...");
-  const row = El({ "tag": "tr", "data-messages-for": threadId }, cell);
+  document.querySelectorAll("[data-messages-for]").forEach((r) => r.remove());
+  const cell = El({ tag: "div", class: "cell messages-cell" }, "Loading...");
+  const row = El(
+    {
+      "tag": "div",
+      "class": "row messages-row",
+      "data-messages-for": threadId,
+    },
+    cell,
+  );
   tr.after(row);
   google.script.run
     .withSuccessHandler((messages: any[]) => renderMessages(messages, cell))
