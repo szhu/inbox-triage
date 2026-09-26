@@ -1,7 +1,7 @@
 {
   "type": "module",
   "scripts": {
-    "build": "bun build src/main.ts --outfile dist/main.js --target browser --no-bundle && cp appsscript.json dist/appsscript.json",
+    "build": "for f in src/*.ts; do bun build \"$f\" --outfile \"dist/$(basename \"$f\" .ts).js\" --target browser --no-bundle; done && cp appsscript.json dist/appsscript.json",
     "push": "bun run build && clasp push --force"
   },
   "devDependencies": {

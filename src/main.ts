@@ -4,14 +4,47 @@ function doGet() {
 
 function listInboxThreads() {
   const threads = GmailApp.search("in:inbox", 0, 50);
-  return threads.map((t) => ({
-    id: t.getId(),
-    subject: t.getFirstMessageSubject(),
-    sender: t.getMessages()[0]?.getFrom() ?? "",
-    date: t.getLastMessageDate().toISOString(),
-    messageCount: t.getMessageCount(),
-    isUnread: t.isUnread(),
-  }));
+  return threads.map((t) => {
+    const sender = t.getMessages()[0]?.getFrom() ?? "";
+    return {
+      id: t.getId(),
+      subject: t.getFirstMessageSubject(),
+      sender,
+      senderName: senderDisplayName(sender),
+      senderGroup: groupForSender(sender),
+      date: t.getLastMessageDate().toISOString(),
+      messageCount: t.getMessageCount(),
+      isUnread: t.isUnread(),
+    };
+  });
+}
+
+// The display name portion of a "Name <addr>" sender, or "" if there is none
+// (including when the "name" is just the address again, e.g. "a@b.com <a@b.com>").
+function senderDisplayName(sender: string): string {
+  const match = sender.match(/^"?([^"<]*?)"?\s*<([^>]+)>$/);
+  if (!match) return "";
+  const [, name, address] = match;
+  return name.trim().toLowerCase() === address.trim().toLowerCase() ? "" : name.trim();
+}
+
+// Groups a sender by organization: a public email address (gmail.com, etc.)
+// groups by its full address; anything else groups by "suffix + one label",
+// e.g. hello@x.y.example.com -> example.com, hello@x.y.example.co.uk -> example.co.uk.
+function groupForSender(sender: string): string {
+  const bracketed = sender.match(/<([^>]+)>/);
+  const address = (bracketed ? bracketed[1] : sender).trim().toLowerCase();
+  const domain = address.split("@")[1];
+  if (!domain) return address;
+  if (PUBLIC_EMAIL_PROVIDERS.has(domain)) return address;
+
+  const labels = domain.split(".");
+  for (let i = 0; i < labels.length - 1; i++) {
+    if (PUBLIC_SUFFIXES.has(labels.slice(i + 1).join("."))) {
+      return labels.slice(i).join(".");
+    }
+  }
+  return domain;
 }
 
 function getThreadMessages(threadId: string) {
@@ -63,8 +96,10 @@ const PAGE_HTML = `<!DOCTYPE html>
     #senders { width: 340px; overflow-y: auto; border-right: 1px solid #ddd; flex-shrink: 0; }
     #senders .sender-row { display: flex; align-items: center; padding: 0.5rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-bottom: 1px solid #eee; white-space: nowrap; }
     #senders .sender-row:hover { background: #f5f5f5; }
-    #senders .sender-row.selected { background: #e8f0fe; font-weight: 600; }
-    #senders .sender-name { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    #senders .sender-row.selected { background: #e8f0fe; }
+    #senders .sender-text { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
+    #senders .sender-display-name { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+    #senders .sender-name { overflow: hidden; text-overflow: ellipsis; color: #666; font-size: 0.8rem; }
     #senders .unread-count { color: #666; margin-left: 0.5rem; min-width: 1.2rem; text-align: right; }
     #senders .icon-btn { margin-left: 0.5rem; }
     .archived { opacity: 0.35; }
@@ -108,7 +143,7 @@ const PAGE_HTML = `<!DOCTYPE html>
       const tbody = document.querySelector("#threads tbody");
       for (const t of threads) {
         const tr = document.createElement("tr");
-        tr.dataset.sender = t.sender;
+        tr.dataset.senderGroup = t.senderGroup;
         tr.dataset.threadId = t.id;
         tr.innerHTML = "<td class='subject'></td><td></td><td></td><td class='actions'></td>";
         tr.children[0].textContent = t.subject;
@@ -127,22 +162,31 @@ const PAGE_HTML = `<!DOCTYPE html>
 
     function renderSenders() {
       const senderList = document.getElementById("senders");
-      const prevSelected = senderList.querySelector(".selected .sender-name")?.textContent;
+      const prevSelected = senderList.querySelector(".selected")?.dataset.group;
       senderList.innerHTML = "";
-      const bySender = [...new Set(allThreads.map((t) => t.sender))];
-      for (const sender of bySender) {
-        const unread = allThreads.filter((t) => t.sender === sender && t.isUnread).length;
+      const groups = [...new Set(allThreads.map((t) => t.senderGroup))];
+      for (const group of groups) {
+        const inGroup = allThreads.filter((t) => t.senderGroup === group);
+        const unread = inGroup.filter((t) => t.isUnread).length;
+        const displayName = shortestName(inGroup);
         const row = document.createElement("div");
         row.className = "sender-row";
-        row.innerHTML = "<span class='sender-name'></span><span class='unread-count'></span>";
-        row.children[0].textContent = sender;
+        row.dataset.group = group;
+        row.innerHTML = "<span class='sender-text'><span class='sender-display-name'></span><span class='sender-name'></span></span><span class='unread-count'></span>";
+        row.querySelector(".sender-display-name").textContent = displayName || group;
+        row.querySelector(".sender-name").textContent = group;
         row.children[1].textContent = unread || "";
-        row.append(iconButton("archive", "Archive all", (btn) => archiveSender(sender, btn)));
-        row.onclick = () => selectSender(sender, row);
+        row.append(iconButton("archive", "Archive all", (btn) => archiveSender(group, btn)));
+        row.onclick = () => selectSender(group, row);
         senderList.appendChild(row);
       }
-      const toSelect = [...senderList.children].find((r) => r.querySelector(".sender-name").textContent === prevSelected) ?? senderList.firstChild;
-      if (toSelect) selectSender(toSelect.querySelector(".sender-name").textContent, toSelect);
+      const toSelect = [...senderList.children].find((r) => r.dataset.group === prevSelected) ?? senderList.firstChild;
+      if (toSelect) selectSender(toSelect.dataset.group, toSelect);
+    }
+
+    function shortestName(threads) {
+      const names = threads.map((t) => t.senderName).filter(Boolean);
+      return names.length ? names.reduce((a, b) => (b.length < a.length ? b : a)) : "";
     }
 
     function iconButton(icon, title, onClick) {
@@ -154,11 +198,11 @@ const PAGE_HTML = `<!DOCTYPE html>
       return btn;
     }
 
-    function selectSender(sender, el) {
+    function selectSender(group, el) {
       document.querySelectorAll("#senders .selected").forEach((d) => d.classList.remove("selected"));
       el.classList.add("selected");
       for (const tr of document.querySelectorAll("#threads tbody tr")) {
-        tr.classList.toggle("hidden-row", tr.dataset.sender !== sender);
+        tr.classList.toggle("hidden-row", tr.dataset.senderGroup !== group);
       }
     }
 
@@ -201,8 +245,8 @@ const PAGE_HTML = `<!DOCTYPE html>
       renderSenders();
     }
 
-    function archiveSender(sender, btn) {
-      const toArchive = allThreads.filter((t) => t.sender === sender && !t.archived);
+    function archiveSender(group, btn) {
+      const toArchive = allThreads.filter((t) => t.senderGroup === group && !t.archived);
       google.script.run.withFailureHandler(fail).archiveThreads(toArchive.map((t) => t.id));
       for (const t of toArchive) {
         t.archived = true;
