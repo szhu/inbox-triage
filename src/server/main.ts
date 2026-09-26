@@ -6,12 +6,13 @@ function listInboxThreads() {
   const threads = GmailApp.search("in:inbox", 0, 50);
   return threads.map((t) => {
     const sender = t.getMessages()[0]?.getFrom() ?? "";
+    const senderGroup = groupForSender(sender);
     return {
       id: t.getId(),
       subject: t.getFirstMessageSubject(),
       sender,
-      senderName: senderDisplayName(sender),
-      senderGroup: groupForSender(sender),
+      senderName: trimSenderDisplayName(senderDisplayName(sender), senderGroup),
+      senderGroup,
       date: t.getLastMessageDate().toISOString(),
       messageCount: t.getMessageCount(),
       isUnread: t.isUnread(),
@@ -29,6 +30,19 @@ function senderDisplayName(sender: string): string {
   return name.trim().toLowerCase() === address.trim().toLowerCase()
     ? ""
     : name.trim();
+}
+
+// Strips a leading "Team" or trailing "Notification(s)"/"Receipts" from a
+// display name, unless that word is also part of the sender's own domain
+// (e.g. keep "Team Headway" since its group is headway.co, not headway.com).
+function trimSenderDisplayName(name: string, senderGroup: string): string {
+  const match = name.match(/^(team)\s+|\s+(notifications?|receipts)$/i);
+  if (!match) return name;
+  const word = (match[1] ?? match[2]).toLowerCase();
+  if (senderGroup.toLowerCase().includes(word)) return name;
+  return (
+    name.slice(0, match.index) + name.slice(match.index! + match[0].length)
+  );
 }
 
 // Groups a sender by organization: a public email address (gmail.com, etc.)
