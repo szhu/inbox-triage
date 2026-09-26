@@ -1,12 +1,13 @@
 {
   "type": "module",
   "scripts": {
-    "build": "for f in src/*.ts; do bun build \"$f\" --outfile \"dist/$(basename \"$f\" .ts).js\" --target browser --no-bundle; done && cp appsscript.json dist/appsscript.json",
+    "build": "bun scripts/build.ts",
     "push": "bun run build && clasp push --force"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
     "@types/google-apps-script": "^1.0.94",
+    "@types/node": "^25.9.1",
     "typescript": "^6.0.3"
   }
 }
