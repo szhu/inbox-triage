@@ -96,15 +96,9 @@ function buildRow(t: any): HTMLElement {
       "class": "row",
       "data-sender-group": t.senderGroup,
       "data-thread-id": t.id,
+      "onclick": () => toggleThread(t.id, row),
     },
-    El(
-      {
-        tag: "span",
-        class: "cell subject",
-        onclick: () => toggleThread(t.id, row),
-      },
-      t.subject,
-    ),
+    El({ tag: "span", class: "cell subject" }, t.subject),
     El(
       { tag: "span", class: "cell date" },
       new Date(t.date).toLocaleDateString(undefined, {
@@ -237,9 +231,14 @@ function toggleThread(threadId: string, tr: HTMLElement) {
   const existing = tr.nextElementSibling as HTMLElement | null;
   if (existing && existing.dataset.messagesFor === threadId) {
     existing.remove();
+    tr.classList.remove("open");
     return;
   }
   document.querySelectorAll("[data-messages-for]").forEach((r) => r.remove());
+  document
+    .querySelectorAll("#threads .row.open")
+    .forEach((r) => r.classList.remove("open"));
+  tr.classList.add("open");
   const cell = El({ tag: "div", class: "cell messages-cell" }, "Loading...");
   const row = El(
     {
@@ -266,19 +265,22 @@ function normalizeBody(body: string): string {
 function renderMessages(messages: any[], cell: HTMLElement) {
   cell.innerHTML = "";
   for (const m of messages) {
+    const address = m.from.match(/<([^>]+)>/)?.[1] ?? m.from;
     const header = El(
       { tag: "div", class: "message-header" },
-      El("span", m.from + " · " + new Date(m.date).toLocaleString()),
-      IconButton({
-        icon: m.isUnread ? "unread" : "read",
-        title: "Toggle read",
-        onclick: (btn) => toggleMessageRead(m.id, btn),
-      }),
+      m.fromName
+        ? El(
+            "span",
+            El({ tag: "span", class: "message-from-name" }, m.fromName),
+            " <" + address + ">",
+          )
+        : El("span", m.from),
+      El("span", new Date(m.date).toLocaleString()),
     );
     const div = El(
       { tag: "div", class: "messages" },
       header,
-      normalizeBody(m.body),
+      El({ tag: "div", class: "message-body" }, normalizeBody(m.body)),
     );
     cell.appendChild(div);
   }
@@ -323,12 +325,6 @@ function toggleThreadStarred(threadId: string, btn: HTMLButtonElement) {
   withPending(btn).setThreadStarred(threadId, nowStarred);
   t.isStarred = nowStarred;
   btn.innerHTML = ICONS[nowStarred ? "star" : "unstar"];
-}
-
-function toggleMessageRead(messageId: string, btn: HTMLButtonElement) {
-  const nowRead = btn.innerHTML === ICONS.unread;
-  withPending(btn).markMessageRead(messageId, nowRead);
-  btn.innerHTML = ICONS[nowRead ? "read" : "unread"];
 }
 
 function fail(error: Error) {

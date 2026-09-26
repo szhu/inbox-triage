@@ -66,13 +66,17 @@ function groupForSender(sender: string): string {
 
 function getThreadMessages(threadId: string) {
   const thread = GmailApp.getThreadById(threadId);
-  return thread.getMessages().map((m) => ({
-    id: m.getId(),
-    from: m.getFrom(),
-    date: m.getDate().toISOString(),
-    body: m.getPlainBody(),
-    isUnread: m.isUnread(),
-  }));
+  return thread.getMessages().map((m) => {
+    const from = m.getFrom();
+    return {
+      id: m.getId(),
+      from,
+      fromName: senderDisplayName(from),
+      date: m.getDate().toISOString(),
+      body: m.getPlainBody(),
+      isUnread: m.isUnread(),
+    };
+  });
 }
 
 function setThreadArchived(threadId: string, archived: boolean) {
@@ -99,11 +103,6 @@ function markThreadsRead(threadIds: string[], read: boolean) {
 function markThreadRead(threadId: string, read: boolean) {
   const thread = GmailApp.getThreadById(threadId);
   read ? thread.markRead() : thread.markUnread();
-}
-
-function markMessageRead(messageId: string, read: boolean) {
-  const message = GmailApp.getMessageById(messageId);
-  read ? message.markRead() : message.markUnread();
 }
 
 const PAGE_HTML = `<!DOCTYPE html>
@@ -143,15 +142,21 @@ const PAGE_HTML = `<!DOCTYPE html>
       font-size: 0.9rem;
     }
     #threads .cell { text-align: left; }
-    #threads .subject { grid-area: subject; cursor: pointer; }
+    #threads .row:not(.messages-row) { cursor: pointer; }
+    #threads .row:not(.messages-row):hover { background: #f5f5f5; }
+    #threads .row:not(.messages-row).open { background: #e8f0fe; }
+    #threads .subject { grid-area: subject; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #threads .date { grid-area: date; color: #666; font-size: 0.8rem; align-self: center; }
     #threads .count { display: none; }
     #threads .actions { grid-area: actions; white-space: nowrap; }
     #threads .actions .icon-btn + .icon-btn { margin-left: 0.3rem; }
     #threads .row.hidden-row { display: none; }
     #threads .messages-row { display: block; }
-    .messages { white-space: pre-wrap; overflow-x: auto; font-size: 0.85rem; background: #fafafa; padding: 0.6rem; margin: 0.3rem 0; border-radius: 4px; }
-    .message-header { display: flex; justify-content: space-between; color: #666; font-size: 0.8rem; margin-bottom: 0.3rem; }
+    .messages { white-space: pre-wrap; overflow-x: auto; font-size: 0.85rem; margin: 0.3rem 0; }
+    .messages + .messages { margin-top: 1rem; }
+    .message-header { display: flex; justify-content: space-between; color: #333; font-size: 0.8rem; background: #eee; padding: 0.4rem 0.8rem; margin-bottom: 0.6rem; border-radius: 4px; }
+    .message-from-name { font-weight: 600; }
+    .message-body { padding: 0 0.8rem; }
     @media (min-width: 700px) {
       #threads .header {
         display: grid;
