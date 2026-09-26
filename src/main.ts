@@ -67,14 +67,14 @@ const PAGE_HTML = `<!DOCTYPE html>
     #senders .sender-archive { margin-left: 0.5rem; }
     .archived { opacity: 0.35; }
     #main { flex: 1; overflow-y: auto; }
-    table { border-collapse: collapse; width: 100%; }
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
     th, td { text-align: left; padding: 0.4rem 0.8rem; border-bottom: 1px solid #ddd; font-size: 0.9rem; vertical-align: top; }
     td.actions { white-space: nowrap; }
     th { color: #666; font-weight: 600; }
     td.subject { cursor: pointer; }
     #status { color: #666; margin: 0.8rem; }
     tr.hidden-row { display: none; }
-    .messages { white-space: pre-wrap; font-size: 0.85rem; background: #fafafa; padding: 0.6rem; margin: 0.3rem 0; border-radius: 4px; }
+    .messages { white-space: pre-wrap; overflow-x: auto; font-size: 0.85rem; background: #fafafa; padding: 0.6rem; margin: 0.3rem 0; border-radius: 4px; }
     .message-header { display: flex; justify-content: space-between; color: #666; font-size: 0.8rem; margin-bottom: 0.3rem; }
   </style>
 </head>
