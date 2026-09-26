@@ -100,7 +100,15 @@ function buildRow(t: any): HTMLElement {
       { tag: "td", class: "subject", onclick: () => toggleThread(t.id, tr) },
       t.subject,
     ),
-    El("td", new Date(t.date).toLocaleString()),
+    El(
+      "td",
+      new Date(t.date).toLocaleDateString(undefined, {
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+    ),
     El("td", String(t.messageCount)),
     El(
       { tag: "td", class: "actions" },

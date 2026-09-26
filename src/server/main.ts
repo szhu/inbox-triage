@@ -121,7 +121,7 @@ const PAGE_HTML = `<!DOCTYPE html>
     #topbar h1 { font-size: 1.1rem; margin: 0; }
     #topbar #status { color: #666; flex: 1; }
     #body { display: flex; flex: 1; overflow: hidden; }
-    #senders { width: 340px; overflow-y: auto; border-right: 1px solid #ddd; flex-shrink: 0; }
+    #senders { width: clamp(200px, 33vw, 340px); overflow-y: auto; border-right: 1px solid #ddd; flex-shrink: 0; }
     #senders .sender-row { display: flex; align-items: center; padding: 0.5rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-bottom: 1px solid #eee; white-space: nowrap; }
     #senders .sender-row:hover { background: #f5f5f5; }
     #senders .sender-row.selected { background: #e8f0fe; }
@@ -134,6 +134,9 @@ const PAGE_HTML = `<!DOCTYPE html>
     #main { flex: 1; overflow-y: auto; }
     table { border-collapse: collapse; width: 100%; table-layout: fixed; }
     th, td { text-align: left; padding: 0.4rem 0.8rem; border-bottom: 1px solid #ddd; font-size: 0.9rem; vertical-align: top; }
+    th:nth-child(2), td:nth-child(2) { width: 7rem; }
+    th:nth-child(3), td:nth-child(3) { width: 2.5rem; }
+    th:last-child, td.actions { width: 6.5rem; }
     td.actions { white-space: nowrap; }
     td.actions .icon-btn + .icon-btn { margin-left: 0.3rem; }
     th { color: #666; font-weight: 600; }
