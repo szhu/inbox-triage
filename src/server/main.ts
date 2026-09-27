@@ -4,7 +4,9 @@ function doGet() {
     "__PAGE_DATA__",
     "const PAGE_DATA = " + JSON.stringify(pageData) + ";",
   );
-  return HtmlService.createHtmlOutput(html).setTitle("Inbox triage");
+  return HtmlService.createHtmlOutput(html)
+    .setTitle("📨 Inbox Triage")
+    .addMetaTag("viewport", "width=device-width, initial-scale=1");
 }
 
 function listInboxThreads(start: number) {
@@ -239,7 +241,7 @@ const PAGE_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <div id="topbar">
-    <h1 id="app-title">Inbox triage</h1>
+    <h1 id="app-title">Inbox Triage</h1>
   </div>
   <div id="body">
     <div id="senders"></div>
