@@ -51,7 +51,7 @@ for (const file of serverFiles) {
 }
 
 // Bundled (not --no-bundle), since client.ts imports from el.ts.
-await buildFile("src/client/client.ts", ".build/client.js", true, true);
+await buildFile("src/client/client.tsx", ".build/client.js", true, true);
 const clientJs = await Bun.file(`${root}.build/client.js`).text();
 const mainJs = await Bun.file(`${root}dist/main.js`).text();
 // main.js's PAGE_HTML is itself a backtick template literal, so the spliced

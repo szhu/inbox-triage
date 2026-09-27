@@ -3,6 +3,7 @@
 // to GmailApp etc., and shares nothing with this file at runtime). Talks to
 // the server only through google.script.run.
 
+import { createRoot } from "react-dom/client";
 import { El } from "./el";
 import { sanitizeHtmlToNode } from "./sanitizeHtml";
 
@@ -533,3 +534,10 @@ function fail(error: Error) {
       (error instanceof Error ? error.message : JSON.stringify(error)),
   );
 }
+
+// Temporary: proves the JSX/React toolchain works end to end. Delete this
+// block once real UI code renders through React instead.
+const toolchainCheckDiv = document.createElement("div");
+toolchainCheckDiv.id = "toolchain-check";
+document.body.appendChild(toolchainCheckDiv);
+createRoot(toolchainCheckDiv).render(<div>React toolchain OK</div>);
