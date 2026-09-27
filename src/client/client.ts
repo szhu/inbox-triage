@@ -134,13 +134,17 @@ function buildRow(t: any): HTMLElement {
   return row;
 }
 
-function render() {
-  document.getElementById("status")!.textContent =
-    allThreads.length + " threads";
+function renderThreadRows() {
   const rows = document.querySelector("#threads .rows")!;
   rows.innerHTML = "";
   for (const t of allThreads) rows.appendChild(buildRow(t));
   document.getElementById("threads")!.hidden = false;
+}
+
+function render() {
+  document.getElementById("status")!.textContent =
+    allThreads.length + " threads";
+  renderThreadRows();
   renderSenders();
   maybeLoadMore();
 }
@@ -227,6 +231,12 @@ function selectSender(group: string, el: HTMLElement) {
     .querySelectorAll("#senders .selected")
     .forEach((d) => d.classList.remove("selected"));
   el.classList.add("selected");
+  // Threads loaded in the background (infinite scroll) never get a row
+  // built on the right side, since that side intentionally isn't touched
+  // by a background load -- rebuild it here so switching senders always
+  // shows all of that sender's threads, not just the ones from the first
+  // page.
+  renderThreadRows();
   for (const row of document.querySelectorAll<HTMLElement>(
     "#threads .rows > .row",
   )) {
