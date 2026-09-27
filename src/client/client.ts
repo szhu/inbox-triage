@@ -79,7 +79,10 @@ function maybeLoadMore() {
       loadingMore = false;
       reachedEndOfInbox = threads.length < PAGE_SIZE;
       allThreads = allThreads.concat(threads);
-      render();
+      document.getElementById("status")!.textContent =
+        allThreads.length + " threads";
+      renderSenders(false);
+      maybeLoadMore();
     })
     .withFailureHandler((error: Error) => {
       loadingMore = false;
@@ -142,7 +145,7 @@ function render() {
   maybeLoadMore();
 }
 
-function renderSenders() {
+function renderSenders(reselect = true) {
   const senderList = document.getElementById("senders")!;
   const prevSelected = (senderList.querySelector(".selected") as HTMLElement)
     ?.dataset.group;
@@ -178,11 +181,15 @@ function renderSenders() {
     [...senderList.children].find(
       (r) => (r as HTMLElement).dataset.group === prevSelected,
     ) ?? senderList.firstChild;
-  if (toSelect)
+  if (!toSelect) return;
+  if (reselect) {
     selectSender(
       (toSelect as HTMLElement).dataset.group!,
       toSelect as HTMLElement,
     );
+  } else {
+    (toSelect as HTMLElement).classList.add("selected");
+  }
 }
 
 function shortestName(threads: any[]): string {
