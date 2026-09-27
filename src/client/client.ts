@@ -49,6 +49,77 @@ let reachedEndOfInbox = false;
 let loadingMore = false;
 refresh();
 
+// A cache-and-dedupe layer in front of server calls whose results never go
+// stale for a given key (e.g. a thread's messages, which are immutable once
+// sent). A successful result is cached forever; a call already in flight for
+// the same key is joined instead of firing a duplicate request.
+const callCache = new Map<string, any>();
+const callsInFlight = new Map<string, Array<(result: any) => void>>();
+
+function cachedCall(
+  key: string,
+  run: (onSuccess: (result: any) => void) => void,
+  onSuccess: (result: any) => void,
+) {
+  if (callCache.has(key)) {
+    onSuccess(callCache.get(key));
+    return;
+  }
+  const waiters = callsInFlight.get(key);
+  if (waiters) {
+    waiters.push(onSuccess);
+    return;
+  }
+  callsInFlight.set(key, [onSuccess]);
+  run((result) => {
+    callCache.set(key, result);
+    const toNotify = callsInFlight.get(key) ?? [];
+    callsInFlight.delete(key);
+    for (const notify of toNotify) notify(result);
+  });
+}
+
+function fetchThreadMessages(
+  threadId: string,
+  onSuccess: (messages: any[]) => void,
+) {
+  cachedCall(
+    `getThreadMessages:${threadId}`,
+    (settle) =>
+      google.script.run
+        .withSuccessHandler(settle)
+        .withFailureHandler(fail)
+        .getThreadMessages(threadId),
+    onSuccess,
+  );
+}
+
+// Bumped every time a different sender is selected, so an in-flight
+// background prefetch from a previously selected sender can tell it's stale
+// and stop issuing further fetches instead of racing the new selection.
+let senderPrefetchGeneration = 0;
+
+// Prefetches (and caches) messages for every thread in a sender's group in
+// the background, one at a time, so opening any of them afterward is
+// instant. Stops as soon as a different sender is selected.
+function prefetchSenderMessages(group: string, generation: number) {
+  const threadIds = allThreads
+    .filter((t) => t.senderGroup === group)
+    .map((t) => t.id)
+    .filter((id) => !callCache.has(`getThreadMessages:${id}`));
+  let i = 0;
+  const next = () => {
+    if (generation !== senderPrefetchGeneration) return;
+    if (i >= threadIds.length) return;
+    const threadId = threadIds[i++];
+    fetchThreadMessages(threadId, () => {
+      if (generation !== senderPrefetchGeneration) return;
+      next();
+    });
+  };
+  next();
+}
+
 document
   .getElementById("topbar")!
   .appendChild(
@@ -319,6 +390,8 @@ function selectSender(group: string, el: HTMLElement) {
   if (matchingRows.length === 1) {
     toggleThread(matchingRows[0].dataset.threadId!, matchingRows[0]);
   }
+  senderPrefetchGeneration++;
+  prefetchSenderMessages(group, senderPrefetchGeneration);
 }
 
 function toggleThread(threadId: string, tr: HTMLElement) {
@@ -343,10 +416,7 @@ function toggleThread(threadId: string, tr: HTMLElement) {
     cell,
   );
   tr.after(row);
-  google.script.run
-    .withSuccessHandler((messages: any[]) => renderMessages(messages, cell))
-    .withFailureHandler(fail)
-    .getThreadMessages(threadId);
+  fetchThreadMessages(threadId, (messages) => renderMessages(messages, cell));
 }
 
 // Tags whose formatting we keep as real elements (structural markup like
