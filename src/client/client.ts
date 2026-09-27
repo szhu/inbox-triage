@@ -416,7 +416,9 @@ function toggleThread(threadId: string, tr: HTMLElement) {
     cell,
   );
   tr.after(row);
-  fetchThreadMessages(threadId, (messages) => renderMessages(messages, cell));
+  fetchThreadMessages(threadId, (messages) =>
+    renderMessages(messages, cell, threadId),
+  );
 }
 
 // Tags whose formatting we keep as real elements (structural markup like
@@ -691,8 +693,26 @@ function isWhitespaceText(node: Node | null): boolean {
   );
 }
 
-function renderMessages(messages: any[], cell: HTMLElement) {
+function renderMessages(messages: any[], cell: HTMLElement, threadId: string) {
   cell.innerHTML = "";
+  cell.appendChild(
+    El(
+      {},
+      El(
+        {
+          tag: "a",
+          class: "open-in-gmail",
+          href:
+            "https://mail.google.com/mail/?authuser=" +
+            messages[0].userEmail +
+            "#all/" +
+            threadId,
+          target: "_blank",
+        },
+        "Open thread in Gmail",
+      ),
+    ),
+  );
   for (const m of messages) {
     const address = m.from.match(/<([^>]+)>/)?.[1] ?? m.from;
     const header = El(

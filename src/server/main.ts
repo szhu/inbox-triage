@@ -87,6 +87,7 @@ function groupForSender(sender: string): string {
 
 function getThreadMessages(threadId: string) {
   const thread = GmailApp.getThreadById(threadId);
+  const userEmail = Session.getActiveUser().getEmail();
   return thread.getMessages().map((m) => {
     const from = m.getFrom();
     return {
@@ -96,6 +97,7 @@ function getThreadMessages(threadId: string) {
       date: m.getDate().toISOString(),
       body: m.getBody(),
       isUnread: m.isUnread(),
+      userEmail,
     };
   });
 }
@@ -164,6 +166,11 @@ const PAGE_HTML = `<!DOCTYPE html>
       font-size: 0.9rem;
     }
     #threads .cell { text-align: left; }
+    #threads .messages-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+    }
     #threads .row:not(.messages-row) { cursor: pointer; }
     #threads .row:not(.messages-row):hover { background: #f5f5f5; }
     #threads .row:not(.messages-row).open { background: #e8f0fe; }
@@ -174,13 +181,14 @@ const PAGE_HTML = `<!DOCTYPE html>
     #threads .actions .icon-btn + .icon-btn { margin-left: 0.3rem; }
     #threads .row.hidden-row { display: none; }
     #threads .messages-row { display: block; }
-    .messages { overflow-x: auto; font-size: 0.85rem; margin: 0.3rem 0; }
+    .messages { overflow-x: auto; font-size: 0.85rem; }
     .messages + .messages { margin-top: 1rem; }
     .message-header { display: flex; justify-content: space-between; color: #333; font-size: 0.8rem; background: #eee; padding: 0.4rem 0.8rem; margin-bottom: 0.6rem; border-radius: 4px; }
     .message-from-name { font-weight: 600; }
     .message-body { padding: 0 0.8rem; word-wrap: break-word; }
     .message-body a { color: #1a73e8; }
     .message-body ul, .message-body ol { margin: 0; }
+    .open-in-gmail { margin: 0 0.8rem; font-size: 0.8rem; color: #1a73e8; }
     @media (min-width: 700px) {
       #threads .header {
         display: grid;
