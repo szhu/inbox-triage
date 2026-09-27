@@ -128,6 +128,15 @@ document
 
 document.getElementById("main")!.addEventListener("scroll", maybeLoadMore);
 
+declare const PAGE_DATA: { appUrl: string };
+
+// Secret shortcut for the PWA install, where there's no browser chrome to
+// hard-reload from: double-clicking the title reloads the whole page.
+document.getElementById("app-title")!.addEventListener("dblclick", () => {
+  document.body.style.opacity = "0";
+  window.top!.location.href = PAGE_DATA.appUrl;
+});
+
 function refresh() {
   reachedEndOfInbox = false;
   google.script.run
