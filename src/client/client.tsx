@@ -535,9 +535,26 @@ function fail(error: Error) {
   );
 }
 
-// Temporary: proves the JSX/React toolchain works end to end. Delete this
-// block once real UI code renders through React instead.
-const toolchainCheckDiv = document.createElement("div");
-toolchainCheckDiv.id = "toolchain-check";
-document.body.appendChild(toolchainCheckDiv);
-createRoot(toolchainCheckDiv).render(<div>React toolchain OK</div>);
+function ReactIconButton({
+  icon,
+  title,
+  onClick,
+  pending,
+}: {
+  icon: keyof typeof ICONS;
+  title: string;
+  onClick: (e: React.MouseEvent) => void;
+  pending?: boolean;
+}) {
+  return (
+    <button
+      className={"icon-btn" + (pending ? " pending" : "")}
+      title={title}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(e);
+      }}
+      dangerouslySetInnerHTML={{ __html: ICONS[icon] }}
+    />
+  );
+}
