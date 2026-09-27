@@ -473,7 +473,7 @@ const SAFE_URL = /^(https?:|mailto:)/i;
 // DocumentFragment containing only an allowlisted set of formatting tags
 // and safe link URLs, so it's safe to insert into the page while still
 // keeping links clickable and bold/italic text intact.
-function sanitizeHtml(html: string): DocumentFragment {
+export function sanitizeHtml(html: string): DocumentFragment {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const out = document.createDocumentFragment();
 
