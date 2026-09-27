@@ -5,20 +5,41 @@ function doGet() {
 function listInboxThreads(start: number) {
   const threads = GmailApp.search("in:inbox", start, 50);
   return threads.map((t) => {
-    const sender = t.getMessages()[0]?.getFrom() ?? "";
-    const senderGroup = groupForSender(sender);
+    const messages = t.getMessages();
+    const firstMessage = messages[0];
+    const lastMessage = messages[messages.length - 1];
+    const sender = lastMessage?.getFrom() ?? "";
+    const listInfo = getMailingListInfo(firstMessage);
+    const senderGroup = listInfo ? listInfo.id : groupForSender(sender);
     return {
       id: t.getId(),
       subject: t.getFirstMessageSubject(),
       sender,
       senderName: trimSenderDisplayName(senderDisplayName(sender), senderGroup),
       senderGroup,
+      isMailingList: listInfo !== null,
+      listId: listInfo?.id ?? "",
       date: t.getLastMessageDate().toISOString(),
       messageCount: t.getMessageCount(),
       isUnread: t.isUnread(),
       isStarred: t.hasStarredMessages(),
     };
   });
+}
+
+// A thread is a real mailing list (not a marketing/newsletter blast) when
+// its message carries both List-Post (RFC 2369 -- "you can reply to this
+// list", which one-way marketing sends never set, even when they set
+// List-Id for their own segmentation purposes) and Precedence: list.
+// Returns the list's own address (parsed from List-Post's mailto: link,
+// since that's guaranteed present once we've confirmed it's a list) as a
+// stable identifier that's consistent across senders of the same list.
+function getMailingListInfo(message: GoogleAppsScript.Gmail.GmailMessage) {
+  const listPost = message.getHeader("List-Post");
+  const precedence = message.getHeader("Precedence");
+  if (!listPost || precedence.toLowerCase() !== "list") return null;
+  const match = listPost.match(/<mailto:([^>]+)>/i);
+  return match ? { id: match[1].toLowerCase() } : null;
 }
 
 // The display name portion of a "Name <addr>" sender, or "" if there is none
@@ -126,6 +147,7 @@ const PAGE_HTML = `<!DOCTYPE html>
     #senders .sender-row.selected { background: #e8f0fe; }
     #senders .sender-text { display: flex; flex-direction: column; overflow: hidden; flex: 1; }
     #senders .sender-display-name { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+    #senders .sender-others-count { font-weight: 400; color: #666; }
     #senders .sender-name { overflow: hidden; text-overflow: ellipsis; color: #666; font-size: 0.8rem; }
     #senders .unread-count { color: #666; margin-left: 0.5rem; min-width: 1.2rem; text-align: right; }
     #senders .icon-btn { margin-left: 0.5rem; }

@@ -158,7 +158,16 @@ function renderSenders(reselect = true) {
   for (const group of groups) {
     const inGroup = allThreads.filter((t) => t.senderGroup === group);
     const unread = inGroup.filter((t) => t.isUnread).length;
-    const displayName = shortestName(inGroup);
+    const isMailingList = inGroup.some((t) => t.isMailingList);
+    const secondLine = isMailingList ? inGroup[0].listId : group;
+    const { name, othersCount } = senderGroupSummary(inGroup);
+    const displayNameEl = El(
+      { tag: "span", class: "sender-display-name" },
+      name || group,
+      othersCount
+        ? El({ tag: "span", class: "sender-others-count" }, ` +${othersCount}`)
+        : "",
+    );
     let row: HTMLElement;
     row = El(
       {
@@ -169,8 +178,8 @@ function renderSenders(reselect = true) {
       },
       El(
         { tag: "span", class: "sender-text" },
-        El({ tag: "span", class: "sender-display-name" }, displayName || group),
-        El({ tag: "span", class: "sender-name" }, group),
+        displayNameEl,
+        El({ tag: "span", class: "sender-name" }, secondLine),
       ),
       El({ tag: "span", class: "unread-count" }, unread ? String(unread) : ""),
       IconButton({
@@ -196,11 +205,71 @@ function renderSenders(reselect = true) {
   }
 }
 
-function shortestName(threads: any[]): string {
-  const names = threads.map((t) => t.senderName).filter(Boolean);
-  return names.length
-    ? names.reduce((a: string, b: string) => (b.length < a.length ? b : a))
-    : "";
+// Shows who sent the most recent thread in the group, plus how many other
+// distinct people/senders have also sent one -- e.g. "Aria Kovalovich +2"
+// -- rather than an arbitrary single name, since a sender group commonly
+// bundles several distinct senders (a mailing list's many posters, or a
+// domain like google.com covering several different Google products/teams).
+// The "+N" part is returned separately so it can be styled less prominently
+// than the name itself.
+function senderGroupSummary(threads: any[]): {
+  name: string;
+  othersCount: number;
+} {
+  const byRecency = [...threads].sort((a, b) => b.date.localeCompare(a.date));
+  // Prefer the most recent thread that actually has a display name over a
+  // merely-more-recent one that doesn't, so the headline name isn't a raw,
+  // hard-to-read address like "noreply-apps-scripts-notifications@google.com"
+  // just because it happens to be the latest.
+  const mostRecent = byRecency.find((t) => t.senderName) ?? byRecency[0];
+  const recentName = mostRecent.senderName || mostRecent.sender;
+  const names = threads.map((t) => t.senderName || t.sender);
+  const others = new Set(names.filter((n) => n !== recentName));
+
+  // --- Shared-phrase override (remove this block to revert to always
+  // showing "<most recent sender> +N others") ---
+  // When every sender's display name shares a contiguous phrase (e.g.
+  // "American Airlines AAdvantage" and "American Airlines Cargo" both start
+  // with "American Airlines"), that phrase alone is a better headline than
+  // any one sender's name plus a "+N" -- it's the actual reason these are
+  // grouped together, not an arbitrary pick.
+  const wordsOf = (name: string) => name.split(/\s+/).filter(Boolean);
+  const containsWordSequence = (haystack: string[], needle: string[]) => {
+    for (let i = 0; i <= haystack.length - needle.length; i++) {
+      if (
+        needle.every(
+          (word, j) => haystack[i + j].toLowerCase() === word.toLowerCase(),
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (names.length > 0) {
+    const firstWords = wordsOf(names[0]);
+    const otherWordLists = names.slice(1).map(wordsOf);
+    let sharedPhrase = "";
+    // Try every contiguous span of the first name's words, longest first, and
+    // keep the longest one that's present in every other name too.
+    for (let len = firstWords.length; len >= 1 && !sharedPhrase; len--) {
+      for (let start = 0; start + len <= firstWords.length; start++) {
+        const span = firstWords.slice(start, start + len);
+        if (
+          otherWordLists.every((words) => containsWordSequence(words, span))
+        ) {
+          sharedPhrase = span.join(" ");
+          break;
+        }
+      }
+    }
+    if (sharedPhrase) {
+      return { name: sharedPhrase, othersCount: 0 };
+    }
+  }
+  // --- end shared-phrase override ---
+
+  return { name: recentName, othersCount: others.size };
 }
 
 function IconButton({
