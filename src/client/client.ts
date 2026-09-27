@@ -717,14 +717,29 @@ function renderMessages(messages: any[], cell: HTMLElement, threadId: string) {
     const address = m.from.match(/<([^>]+)>/)?.[1] ?? m.from;
     const header = El(
       { tag: "div", class: "message-header" },
-      m.fromName
+      El(
+        { tag: "div", class: "message-header-row" },
+        m.fromName
+          ? El(
+              "span",
+              El({ tag: "span", class: "message-from-name" }, m.fromName),
+              " <" + address + ">",
+            )
+          : El({ tag: "span", class: "message-from-name" }, m.from),
+        El("span", new Date(m.date).toLocaleString()),
+      ),
+      m.to
+        ? El({ tag: "div", class: "message-header-recipients" }, "To: " + m.to)
+        : "",
+      m.cc
+        ? El({ tag: "div", class: "message-header-recipients" }, "Cc: " + m.cc)
+        : "",
+      m.bcc
         ? El(
-            "span",
-            El({ tag: "span", class: "message-from-name" }, m.fromName),
-            " <" + address + ">",
+            { tag: "div", class: "message-header-recipients" },
+            "Bcc: " + m.bcc,
           )
-        : El("span", m.from),
-      El("span", new Date(m.date).toLocaleString()),
+        : "",
     );
     const bodyEl = El({ tag: "div", class: "message-body" });
     bodyEl.appendChild(sanitizeHtml(m.body));

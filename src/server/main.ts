@@ -94,6 +94,9 @@ function getThreadMessages(threadId: string) {
       id: m.getId(),
       from,
       fromName: senderDisplayName(from),
+      to: m.getTo(),
+      cc: m.getCc(),
+      bcc: m.getBcc(),
       date: m.getDate().toISOString(),
       body: m.getBody(),
       isUnread: m.isUnread(),
@@ -184,7 +187,9 @@ const PAGE_HTML = `<!DOCTYPE html>
     #threads .messages-row { display: block; }
     .messages { overflow-x: auto; font-size: 0.85rem; }
     .messages + .messages { margin-top: 1rem; }
-    .message-header { display: flex; justify-content: space-between; color: #333; font-size: 0.8rem; background: #eee; padding: 0.4rem 0.8rem; margin-bottom: 0.6rem; border-radius: 4px; }
+    .message-header { color: #333; font-size: 0.8rem; background: #eee; padding: 0.4rem 0.8rem; margin-bottom: 0.6rem; border-radius: 4px; }
+    .message-header-row { display: flex; justify-content: space-between; }
+    .message-header-recipients { margin-top: 0.2rem; color: #666; }
     .message-from-name { font-weight: 600; }
     .message-body { padding: 0 0.8rem; word-wrap: break-word; }
     .message-body a { color: #1a73e8; }
