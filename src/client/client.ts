@@ -47,6 +47,14 @@ const PAGE_SIZE = 50;
 let allThreads: any[] = [];
 let reachedEndOfInbox = false;
 let loadingMore = false;
+
+const refreshButton = IconButton({
+  icon: "refresh",
+  title: "Refresh",
+  onclick: refresh,
+});
+document.getElementById("topbar")!.appendChild(refreshButton);
+
 refresh();
 
 // A cache-and-dedupe layer in front of server calls whose results never go
@@ -120,12 +128,6 @@ function prefetchSenderMessages(group: string, generation: number) {
   next();
 }
 
-document
-  .getElementById("topbar")!
-  .appendChild(
-    IconButton({ icon: "refresh", title: "Refresh", onclick: refresh }),
-  );
-
 document.getElementById("main")!.addEventListener("scroll", maybeLoadMore);
 
 declare const PAGE_DATA: { appUrl: string };
@@ -139,14 +141,11 @@ document.getElementById("app-title")!.addEventListener("dblclick", () => {
 
 function refresh() {
   reachedEndOfInbox = false;
-  google.script.run
-    .withSuccessHandler((threads: any[]) => {
-      allThreads = threads;
-      reachedEndOfInbox = threads.length < PAGE_SIZE;
-      render();
-    })
-    .withFailureHandler(fail)
-    .listInboxThreads(0);
+  withPending(refreshButton, (threads: any[]) => {
+    allThreads = threads;
+    reachedEndOfInbox = threads.length < PAGE_SIZE;
+    render();
+  }).listInboxThreads(0);
 }
 
 function maybeLoadMore() {
@@ -159,8 +158,6 @@ function maybeLoadMore() {
       loadingMore = false;
       reachedEndOfInbox = threads.length < PAGE_SIZE;
       allThreads = allThreads.concat(threads);
-      document.getElementById("status")!.textContent =
-        allThreads.length + " threads";
       renderSenders(false);
       maybeLoadMore();
     })
@@ -222,8 +219,6 @@ function renderThreadRows() {
 }
 
 function render() {
-  document.getElementById("status")!.textContent =
-    allThreads.length + " threads";
   renderThreadRows();
   renderSenders();
   maybeLoadMore();
@@ -760,11 +755,10 @@ function renderMessages(messages: any[], cell: HTMLElement, threadId: string) {
 function archiveOne(threadId: string, tr: HTMLElement, btn: HTMLElement) {
   const t = allThreads.find((t) => t.id === threadId);
   const nowArchived = !t.archived;
-  withPending(btn).setThreadArchived(threadId, nowArchived);
+  withPending(btn, renderSenders).setThreadArchived(threadId, nowArchived);
   t.archived = nowArchived;
   tr.classList.toggle("archived", nowArchived);
   btn.innerHTML = ICONS[nowArchived ? "unarchive" : "archive"];
-  renderSenders();
 }
 
 function archiveSender(group: string, btn: HTMLElement) {
@@ -784,10 +778,9 @@ function archiveSender(group: string, btn: HTMLElement) {
 function toggleThreadRead(threadId: string, btn: HTMLButtonElement) {
   const t = allThreads.find((t) => t.id === threadId);
   const nowRead = t.isUnread;
-  withPending(btn).markThreadRead(threadId, nowRead);
+  withPending(btn, renderSenders).markThreadRead(threadId, nowRead);
   t.isUnread = !nowRead;
   btn.innerHTML = ICONS[t.isUnread ? "unread" : "read"];
-  renderSenders();
 }
 
 function toggleThreadStarred(threadId: string, btn: HTMLButtonElement) {
@@ -799,5 +792,5 @@ function toggleThreadStarred(threadId: string, btn: HTMLButtonElement) {
 }
 
 function fail(error: Error) {
-  document.getElementById("status")!.textContent = "Error: " + error.message;
+  alert("Error: " + error.message);
 }

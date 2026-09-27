@@ -142,14 +142,32 @@ const PAGE_HTML = `<!DOCTYPE html>
   <base target="_top">
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; display: flex; flex-direction: column; height: 100vh; transition: opacity 0.2s ease-in-out; }
-    button.icon-btn { font: inherit; cursor: pointer; width: 1.6rem; height: 1.6rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #ccc; border-radius: 3px; background: #fff; }
+    button.icon-btn { font: inherit; cursor: pointer; width: 1.6rem; height: 1.6rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #ccc; border-radius: 3px; background: #fff; position: relative; }
     button.icon-btn:hover { background: #f0f0f0; }
     button.icon-btn svg { width: 14px; height: 14px; }
-    button.icon-btn.pending { animation: pending-pulse 0.8s ease-in-out infinite; }
-    @keyframes pending-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    button.icon-btn.pending { border-color: transparent; }
+    button.icon-btn.pending::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: conic-gradient(from var(--ants-angle, 0deg), #ccc, transparent 60%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      animation: marching-ants 0.8s linear infinite;
+    }
+    @property --ants-angle {
+      syntax: "<angle>";
+      inherits: false;
+      initial-value: 0deg;
+    }
+    @keyframes marching-ants {
+      to { --ants-angle: 360deg; }
+    }
     #topbar { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; border-bottom: 1px solid #ddd; flex-shrink: 0; }
-    #topbar h1 { font-size: 1.1rem; margin: 0; }
-    #topbar #status { color: #666; flex: 1; }
+    #topbar h1 { font-size: 1.1rem; margin: 0 auto 0 0; }
     #body { display: flex; flex: 1; overflow: hidden; }
     #senders { width: clamp(200px, 33vw, 340px); overflow-y: auto; border-right: 1px solid #ddd; flex-shrink: 0; }
     #senders .sender-row { display: flex; align-items: center; padding: 0.5rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-bottom: 1px solid #eee; white-space: nowrap; }
@@ -222,7 +240,6 @@ const PAGE_HTML = `<!DOCTYPE html>
 <body>
   <div id="topbar">
     <h1 id="app-title">Inbox triage</h1>
-    <div id="status">Loading...</div>
   </div>
   <div id="body">
     <div id="senders"></div>
