@@ -140,6 +140,13 @@ export function sanitizeHtmlToNode(html: string): DocumentFragment {
   return out;
 }
 
+// Sanitizes html, serialized to a string instead of a live node.
+export function sanitizeHtmlToString(html: string): string {
+  const container = document.createElement("div");
+  container.appendChild(sanitizeHtmlToNode(html));
+  return container.innerHTML;
+}
+
 // Strips leading/trailing <br>s and whitespace-only text so an element (or
 // the top-level fragment) doesn't start/end with the blank space left over
 // from the original HTML's own formatting/indentation.
