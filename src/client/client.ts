@@ -135,6 +135,7 @@ declare const PAGE_DATA: { appUrl: string };
 // Secret shortcut for the PWA install, where there's no browser chrome to
 // hard-reload from: double-clicking the title reloads the whole page.
 document.getElementById("app-title")!.addEventListener("dblclick", () => {
+  navigatingAway = true;
   document.body.style.opacity = "0";
   window.top!.location.href = PAGE_DATA.appUrl;
 });
@@ -791,6 +792,15 @@ function toggleThreadStarred(threadId: string, btn: HTMLButtonElement) {
   btn.innerHTML = ICONS[nowStarred ? "star" : "unstar"];
 }
 
+// Set right before navigating away (e.g. the double-click reload), so
+// fail() can ignore errors from requests the navigation aborted in flight
+// instead of alerting on a spurious error the user didn't cause.
+let navigatingAway = false;
+
 function fail(error: Error) {
-  alert("Error: " + error.message);
+  if (navigatingAway) return;
+  alert(
+    "Error: " +
+      (error instanceof Error ? error.message : JSON.stringify(error)),
+  );
 }
