@@ -13,7 +13,12 @@ import { readdir } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url).pathname;
 
-async function buildFile(entry: string, outfile: string, bundle: boolean) {
+async function buildFile(
+  entry: string,
+  outfile: string,
+  bundle: boolean,
+  minify = false,
+) {
   const args = [
     "bun",
     "build",
@@ -24,10 +29,12 @@ async function buildFile(entry: string, outfile: string, bundle: boolean) {
     "browser",
   ];
   if (!bundle) args.push("--no-bundle");
+  if (minify) args.push("--minify");
   const proc = Bun.spawn(args, {
     cwd: root,
     stdout: "inherit",
     stderr: "inherit",
+    env: { ...process.env, NODE_ENV: "production" },
   });
   if ((await proc.exited) !== 0) throw new Error(`Failed to build ${entry}`);
 }
@@ -44,7 +51,7 @@ for (const file of serverFiles) {
 }
 
 // Bundled (not --no-bundle), since client.ts imports from el.ts.
-await buildFile("src/client/client.ts", ".build/client.js", true);
+await buildFile("src/client/client.ts", ".build/client.js", true, true);
 const clientJs = await Bun.file(`${root}.build/client.js`).text();
 const mainJs = await Bun.file(`${root}dist/main.js`).text();
 // main.js's PAGE_HTML is itself a backtick template literal, so the spliced
@@ -54,7 +61,8 @@ const mainJs = await Bun.file(`${root}dist/main.js`).text();
 const escapedClientJs = clientJs
   .replace(/\\/g, "\\\\")
   .replace(/`/g, "\\`")
-  .replace(/\$\{/g, "\\${");
+  .replace(/\$\{/g, "\\${")
+  .replace(/<\/script/gi, "<\\\\/script");
 await Bun.write(
   `${root}dist/main.js`,
   mainJs.replace("__CLIENT_JS__", () => escapedClientJs),
