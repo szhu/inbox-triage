@@ -6,7 +6,11 @@ function doGet() {
   );
   return HtmlService.createHtmlOutput(html)
     .setTitle("📨 Inbox Triage")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1");
+    .addMetaTag(
+      "viewport",
+      "width=device-width, initial-scale=1, viewport-fit=cover",
+    )
+    .addMetaTag("apple-mobile-web-app-capable", "yes");
 }
 
 function listInboxThreads(start: number) {
@@ -168,10 +172,10 @@ const PAGE_HTML = `<!DOCTYPE html>
     @keyframes marching-ants {
       to { --ants-angle: 360deg; }
     }
-    #topbar { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; border-bottom: 1px solid #ddd; flex-shrink: 0; }
+    #topbar { display: flex; align-items: center; gap: 0.6rem; padding: calc(0.6rem + env(safe-area-inset-top, 0px) + 2rem) 0.8rem 0.6rem; border-bottom: 1px solid #ddd; flex-shrink: 0; }
     #topbar h1 { font-size: 1.1rem; margin: 0 auto 0 0; }
     #body { display: flex; flex: 1; overflow: hidden; }
-    #senders { width: clamp(200px, 33vw, 340px); overflow-y: auto; border-right: 1px solid #ddd; flex-shrink: 0; }
+    #senders { width: clamp(200px, 33vw, 340px); overflow-y: auto; border-right: 1px solid #ddd; flex-shrink: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
     #senders .sender-row { display: flex; align-items: center; padding: 0.5rem 0.8rem; font-size: 0.85rem; cursor: pointer; border-bottom: 1px solid #eee; white-space: nowrap; }
     #senders .sender-row:hover { background: #f5f5f5; }
     #senders .sender-row.selected { background: #e8f0fe; }
@@ -183,6 +187,7 @@ const PAGE_HTML = `<!DOCTYPE html>
     #senders .icon-btn { margin-left: 0.5rem; }
     .archived { opacity: 0.35; }
     #main { flex: 1; overflow-y: auto; }
+    #threads .rows { padding-bottom: env(safe-area-inset-bottom, 0px); }
     #threads .header { display: none; }
     #threads .row {
       display: grid;
