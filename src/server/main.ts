@@ -73,7 +73,7 @@ function getThreadMessages(threadId: string) {
       from,
       fromName: senderDisplayName(from),
       date: m.getDate().toISOString(),
-      body: m.getPlainBody(),
+      body: m.getBody(),
       isUnread: m.isUnread(),
     };
   });
@@ -152,11 +152,13 @@ const PAGE_HTML = `<!DOCTYPE html>
     #threads .actions .icon-btn + .icon-btn { margin-left: 0.3rem; }
     #threads .row.hidden-row { display: none; }
     #threads .messages-row { display: block; }
-    .messages { white-space: pre-wrap; overflow-x: auto; font-size: 0.85rem; margin: 0.3rem 0; }
+    .messages { overflow-x: auto; font-size: 0.85rem; margin: 0.3rem 0; }
     .messages + .messages { margin-top: 1rem; }
     .message-header { display: flex; justify-content: space-between; color: #333; font-size: 0.8rem; background: #eee; padding: 0.4rem 0.8rem; margin-bottom: 0.6rem; border-radius: 4px; }
     .message-from-name { font-weight: 600; }
-    .message-body { padding: 0 0.8rem; }
+    .message-body { padding: 0 0.8rem; word-wrap: break-word; }
+    .message-body a { color: #1a73e8; }
+    .message-body ul, .message-body ol { margin: 0; }
     @media (min-width: 700px) {
       #threads .header {
         display: grid;
