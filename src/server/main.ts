@@ -175,6 +175,7 @@ const PAGE_HTML = `<!DOCTYPE html>
     #threads .row:not(.messages-row):hover { background: #f5f5f5; }
     #threads .row:not(.messages-row).open { background: #e8f0fe; }
     #threads .subject { grid-area: subject; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #threads .row.open .subject { overflow: visible; text-overflow: clip; white-space: normal; }
     #threads .date { grid-area: date; color: #666; font-size: 0.8rem; align-self: center; }
     #threads .count { display: none; }
     #threads .actions { grid-area: actions; white-space: nowrap; }
