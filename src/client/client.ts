@@ -306,10 +306,18 @@ function selectSender(group: string, el: HTMLElement) {
   // shows all of that sender's threads, not just the ones from the first
   // page.
   renderThreadRows();
+  const matchingRows: HTMLElement[] = [];
   for (const row of document.querySelectorAll<HTMLElement>(
     "#threads .rows > .row",
   )) {
-    row.classList.toggle("hidden-row", row.dataset.senderGroup !== group);
+    const matches = row.dataset.senderGroup === group;
+    row.classList.toggle("hidden-row", !matches);
+    if (matches) matchingRows.push(row);
+  }
+  // A sender with just one thread has nothing to pick between -- open it
+  // immediately instead of making that a required extra click.
+  if (matchingRows.length === 1) {
+    toggleThread(matchingRows[0].dataset.threadId!, matchingRows[0]);
   }
 }
 
