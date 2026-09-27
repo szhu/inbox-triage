@@ -1,7 +1,6 @@
 {
   "compilerOptions": {
     "lib": ["ES2019", "DOM"],
-    "module": "preserve",
     "types": ["google-apps-script", "bun"]
   },
   "extends": "../../tsconfig.base.json"

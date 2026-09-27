@@ -1,10 +1,10 @@
-// Regression tests for sanitizeHtml, the HTML-email sanitizer in client.ts.
-// These lock in CURRENT, already-shipped behavior only -- including known
-// quirks (like the empty-spacer-paragraph double-break stacking below) that
-// are tracked as separate bugs, not something to fix here. Each test is
-// written against sanitizeHtml's public output (never the internal helpers)
-// and is meant to read like a plausible visual-regression report a user
-// would file after seeing a real email render oddly.
+// Regression tests for sanitizeHtml, the HTML-email sanitizer in
+// sanitizeHtml.ts. These lock in CURRENT, already-shipped behavior only --
+// including known quirks (like the empty-spacer-paragraph double-break
+// stacking below) that are tracked as separate bugs, not something to fix
+// here. Each test is written against sanitizeHtml's public output (never the
+// internal helpers) and is meant to read like a plausible visual-regression
+// report a user would file after seeing a real email render oddly.
 //
 // Fixtures are adapted from real marketing/transactional/mailing-list email
 // HTML encountered while building this feature (Spectrum, StableHost,
@@ -16,42 +16,19 @@
 
 import { Window } from "happy-dom";
 import { beforeAll, describe, expect, test } from "bun:test";
+import { sanitizeHtml } from "./sanitizeHtml";
 
-// client.ts is written to run directly in a browser: importing it runs its
-// top-level side effects immediately (wiring up #topbar/#main, and calling
-// refresh(), which reaches for google.script.run). None of that is under
-// test here -- only sanitizeHtml, a pure(-ish) DOM-in/DOM-out function
-// defined further down in the same file -- but the module still needs a DOM
-// with the elements it expects, and a stub `google` global, before it can be
-// imported at all.
-let sanitizeHtml: (html: string) => DocumentFragment;
-
-beforeAll(async () => {
+beforeAll(() => {
   // sanitizeHtml uses DOMParser/document/Node directly as globals (it runs
   // in a browser in production), so a DOM implementation needs to be
-  // installed before client.ts is even imported. happy-dom is lighter than
-  // jsdom and is enough for the plain-HTML parsing this function does.
+  // installed before it's called. happy-dom is lighter than jsdom and is
+  // enough for the plain-HTML parsing this function does.
   const window = new Window();
   Object.assign(globalThis, {
     document: window.document,
     DOMParser: window.DOMParser,
     Node: window.Node,
   });
-  document.body.innerHTML =
-    '<div id="topbar"></div><div id="main"><div id="status"></div>' +
-    '<div id="threads"><div class="rows"></div></div>' +
-    '<div id="senders"></div></div>';
-  // A no-op stub: refresh() (called at module load) chains
-  // withSuccessHandler/withFailureHandler and calls listInboxThreads, none
-  // of which this test suite exercises.
-  const stubRunner: any = {
-    withSuccessHandler: () => stubRunner,
-    withFailureHandler: () => stubRunner,
-    listInboxThreads: () => {},
-  };
-  (globalThis as any).google = { script: { run: stubRunner } };
-
-  ({ sanitizeHtml } = await import("./client"));
 });
 
 // Renders sanitizeHtml's output the way client.ts actually consumes it
