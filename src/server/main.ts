@@ -249,9 +249,7 @@ const PAGE_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body class="__BODY_CLASS__">
-  <div id="topbar">
-    <h1 id="app-title">Inbox Triage</h1>
-  </div>
+  <div id="topbar"></div>
   <div id="body">
     <div id="senders"></div>
     <div id="main">

@@ -50,12 +50,14 @@ let allThreads: any[] = [];
 let reachedEndOfInbox = false;
 let loadingMore = false;
 
-const refreshButton = IconButton({
-  icon: "refresh",
-  title: "Refresh",
-  onclick: refresh,
-});
-document.getElementById("topbar")!.appendChild(refreshButton);
+let topbarRefreshing = false;
+const topbarRoot = createRoot(document.getElementById("topbar")!);
+function renderTopbar() {
+  topbarRoot.render(
+    <Topbar refreshing={topbarRefreshing} onRefresh={refresh} />,
+  );
+}
+renderTopbar();
 
 refresh();
 
@@ -144,11 +146,22 @@ document.getElementById("app-title")!.addEventListener("dblclick", () => {
 
 function refresh() {
   reachedEndOfInbox = false;
-  withPending(refreshButton, (threads: any[]) => {
-    allThreads = threads;
-    reachedEndOfInbox = threads.length < PAGE_SIZE;
-    render();
-  }).listInboxThreads(0);
+  topbarRefreshing = true;
+  renderTopbar();
+  google.script.run
+    .withSuccessHandler((threads: any[]) => {
+      topbarRefreshing = false;
+      renderTopbar();
+      allThreads = threads;
+      reachedEndOfInbox = threads.length < PAGE_SIZE;
+      render();
+    })
+    .withFailureHandler((error: Error) => {
+      topbarRefreshing = false;
+      renderTopbar();
+      fail(error);
+    })
+    .listInboxThreads(0);
 }
 
 function maybeLoadMore() {
@@ -556,5 +569,34 @@ function ReactIconButton({
       }}
       dangerouslySetInnerHTML={{ __html: ICONS[icon] }}
     />
+  );
+}
+
+function Topbar({
+  refreshing,
+  onRefresh,
+}: {
+  refreshing: boolean;
+  onRefresh: () => void;
+}) {
+  return (
+    <>
+      <h1
+        id="app-title"
+        onDoubleClick={() => {
+          navigatingAway = true;
+          document.body.style.opacity = "0";
+          window.top!.location.href = PAGE_DATA.appUrl;
+        }}
+      >
+        Inbox Triage
+      </h1>
+      <ReactIconButton
+        icon="refresh"
+        title="Refresh"
+        pending={refreshing}
+        onClick={onRefresh}
+      />
+    </>
   );
 }
