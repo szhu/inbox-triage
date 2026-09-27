@@ -143,7 +143,7 @@ const PAGE_HTML = `<!DOCTYPE html>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; display: flex; flex-direction: column; height: 100vh; transition: opacity 0.2s ease-in-out; }
     button.icon-btn { font: inherit; cursor: pointer; width: 1.6rem; height: 1.6rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #ccc; border-radius: 3px; background: #fff; position: relative; }
-    button.icon-btn:hover { background: #f0f0f0; }
+    @media (hover: hover) { button.icon-btn:hover { background: #f0f0f0; } }
     button.icon-btn svg { width: 14px; height: 14px; }
     button.icon-btn.pending { border-color: transparent; }
     button.icon-btn.pending::before {
