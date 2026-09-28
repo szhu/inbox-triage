@@ -59,6 +59,21 @@ function renderTopbar() {
 }
 renderTopbar();
 
+let selectedSenderGroup: string | null = null;
+let openThreadId: string | null = null;
+let archiveSenderPending: string | null = null;
+const sendersRoot = createRoot(document.getElementById("senders")!);
+function renderSenderList() {
+  sendersRoot.render(
+    <SenderList
+      selectedGroup={selectedSenderGroup}
+      onSelectGroup={selectSender}
+      archiveSenderPending={archiveSenderPending}
+      onArchiveSender={archiveSender}
+    />,
+  );
+}
+
 refresh();
 
 // A cache-and-dedupe layer in front of server calls whose results never go
@@ -174,7 +189,7 @@ function maybeLoadMore() {
       loadingMore = false;
       reachedEndOfInbox = threads.length < PAGE_SIZE;
       allThreads = allThreads.concat(threads);
-      renderSenders(false);
+      renderSenderList();
       maybeLoadMore();
     })
     .withFailureHandler((error: Error) => {
@@ -236,64 +251,12 @@ function renderThreadRows() {
 
 function render() {
   renderThreadRows();
-  renderSenders();
-  maybeLoadMore();
-}
-
-function renderSenders(reselect = true) {
-  const senderList = document.getElementById("senders")!;
-  const prevSelected = (senderList.querySelector(".selected") as HTMLElement)
-    ?.dataset.group;
-  senderList.innerHTML = "";
-  const groups = [...new Set(allThreads.map((t) => t.senderGroup))];
-  for (const group of groups) {
-    const inGroup = allThreads.filter((t) => t.senderGroup === group);
-    const unread = inGroup.filter((t) => t.isUnread).length;
-    const isMailingList = inGroup.some((t) => t.isMailingList);
-    const secondLine = isMailingList ? inGroup[0].listId : group;
-    const { name, othersCount } = senderGroupSummary(inGroup);
-    const displayNameEl = El(
-      { tag: "span", class: "sender-display-name" },
-      name || group,
-      othersCount
-        ? El({ tag: "span", class: "sender-others-count" }, ` +${othersCount}`)
-        : "",
-    );
-    let row: HTMLElement;
-    row = El(
-      {
-        "tag": "div",
-        "class": "sender-row",
-        "data-group": group,
-        "onclick": () => selectSender(group, row),
-      },
-      El(
-        { tag: "span", class: "sender-text" },
-        displayNameEl,
-        El({ tag: "span", class: "sender-name" }, secondLine),
-      ),
-      El({ tag: "span", class: "unread-count" }, unread ? String(unread) : ""),
-      IconButton({
-        icon: "archive",
-        title: "Archive all",
-        onclick: (btn) => archiveSender(group, btn),
-      }),
-    );
-    senderList.appendChild(row);
-  }
-  const toSelect =
-    [...senderList.children].find(
-      (r) => (r as HTMLElement).dataset.group === prevSelected,
-    ) ?? senderList.firstChild;
-  if (!toSelect) return;
-  if (reselect) {
-    selectSender(
-      (toSelect as HTMLElement).dataset.group!,
-      toSelect as HTMLElement,
-    );
+  if (!selectedSenderGroup && allThreads.length > 0) {
+    selectSender(allThreads[0].senderGroup);
   } else {
-    (toSelect as HTMLElement).classList.add("selected");
+    renderSenderList();
   }
+  maybeLoadMore();
 }
 
 // Shows who sent the most recent thread in the group, plus how many other
@@ -386,11 +349,9 @@ function IconButton({
   return btn;
 }
 
-function selectSender(group: string, el: HTMLElement) {
-  document
-    .querySelectorAll("#senders .selected")
-    .forEach((d) => d.classList.remove("selected"));
-  el.classList.add("selected");
+function selectSender(group: string) {
+  selectedSenderGroup = group;
+  renderSenderList();
   // Threads loaded in the background (infinite scroll) never get a row
   // built on the right side, since that side intentionally isn't touched
   // by a background load -- rebuild it here so switching senders always
@@ -499,30 +460,42 @@ function renderMessages(messages: any[], cell: HTMLElement, threadId: string) {
 function archiveOne(threadId: string, tr: HTMLElement, btn: HTMLElement) {
   const t = allThreads.find((t) => t.id === threadId);
   const nowArchived = !t.archived;
-  withPending(btn, renderSenders).setThreadArchived(threadId, nowArchived);
+  withPending(btn, renderSenderList).setThreadArchived(threadId, nowArchived);
   t.archived = nowArchived;
   tr.classList.toggle("archived", nowArchived);
   btn.innerHTML = ICONS[nowArchived ? "unarchive" : "archive"];
 }
 
-function archiveSender(group: string, btn: HTMLElement) {
+function archiveSender(group: string) {
   const toArchive = allThreads.filter(
     (t) => t.senderGroup === group && !t.archived,
   );
-  withPending(btn).archiveThreads(toArchive.map((t) => t.id));
+  archiveSenderPending = group;
+  renderSenderList();
+  google.script.run
+    .withSuccessHandler(() => {
+      archiveSenderPending = null;
+      renderSenderList();
+    })
+    .withFailureHandler((error: Error) => {
+      archiveSenderPending = null;
+      renderSenderList();
+      fail(error);
+    })
+    .archiveThreads(toArchive.map((t) => t.id));
   for (const t of toArchive) {
     t.archived = true;
     document
-      .querySelector(`tr[data-thread-id="${t.id}"]`)
+      .querySelector(`[data-thread-id="${t.id}"]`)
       ?.classList.add("archived");
   }
-  btn.closest(".sender-row")!.classList.add("archived");
+  renderSenderList();
 }
 
 function toggleThreadRead(threadId: string, btn: HTMLButtonElement) {
   const t = allThreads.find((t) => t.id === threadId);
   const nowRead = t.isUnread;
-  withPending(btn, renderSenders).markThreadRead(threadId, nowRead);
+  withPending(btn, renderSenderList).markThreadRead(threadId, nowRead);
   t.isUnread = !nowRead;
   btn.innerHTML = ICONS[t.isUnread ? "unread" : "read"];
 }
@@ -597,6 +570,86 @@ function Topbar({
         pending={refreshing}
         onClick={onRefresh}
       />
+    </>
+  );
+}
+
+function SenderRow({
+  group,
+  threads,
+  selected,
+  onSelect,
+  pending,
+  onArchiveAll,
+}: {
+  group: string;
+  threads: any[];
+  selected: boolean;
+  onSelect: () => void;
+  pending: boolean;
+  onArchiveAll: () => void;
+}) {
+  const unread = threads.filter((t) => t.isUnread).length;
+  const isMailingList = threads.some((t) => t.isMailingList);
+  const secondLine = isMailingList ? threads[0].listId : group;
+  const { name, othersCount } = senderGroupSummary(threads);
+  const archived = threads.every((t) => t.archived);
+  return (
+    <div
+      className={
+        "sender-row" +
+        (selected ? " selected" : "") +
+        (archived ? " archived" : "")
+      }
+      onClick={onSelect}
+    >
+      <span className="sender-text">
+        <span className="sender-display-name">
+          {name || group}
+          {othersCount ? (
+            <span className="sender-others-count"> +{othersCount}</span>
+          ) : (
+            ""
+          )}
+        </span>
+        <span className="sender-name">{secondLine}</span>
+      </span>
+      <span className="unread-count">{unread ? String(unread) : ""}</span>
+      <ReactIconButton
+        icon="archive"
+        title="Archive all"
+        pending={pending}
+        onClick={onArchiveAll}
+      />
+    </div>
+  );
+}
+
+function SenderList({
+  selectedGroup,
+  onSelectGroup,
+  archiveSenderPending,
+  onArchiveSender,
+}: {
+  selectedGroup: string | null;
+  onSelectGroup: (group: string) => void;
+  archiveSenderPending: string | null;
+  onArchiveSender: (group: string) => void;
+}) {
+  const groups = [...new Set(allThreads.map((t) => t.senderGroup))];
+  return (
+    <>
+      {groups.map((group) => (
+        <SenderRow
+          key={group}
+          group={group}
+          threads={allThreads.filter((t) => t.senderGroup === group)}
+          selected={selectedGroup === group}
+          onSelect={() => onSelectGroup(group)}
+          pending={archiveSenderPending === group}
+          onArchiveAll={() => onArchiveSender(group)}
+        />
+      ))}
     </>
   );
 }
