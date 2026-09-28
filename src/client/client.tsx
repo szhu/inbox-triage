@@ -21,6 +21,30 @@ interface ScriptRunner {
 }
 declare const google: { script: { run: ScriptRunner } };
 
+// google.script.run has no way to cancel an in-flight call -- once it's
+// sent, the server runs it to completion regardless. This mirrors what
+// fetch(url, { signal }) does instead: the call still happens, but its
+// result is silently dropped if the signal was already aborted by the
+// time it comes back, so a stale response can never overwrite newer state.
+function runCancelable(
+  run: (
+    onSuccess: (result: any) => void,
+    onError: (error: Error) => void,
+  ) => void,
+  signal: AbortSignal,
+  onSuccess: (result: any) => void,
+  onError: (error: Error) => void,
+) {
+  run(
+    (result) => {
+      if (!signal.aborted) onSuccess(result);
+    },
+    (error) => {
+      if (!signal.aborted) onError(error);
+    },
+  );
+}
+
 const ICONS = {
   archive:
     '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="3" fill="none" stroke="currentColor"/><path d="M3 6h10v7H3z" fill="none" stroke="currentColor"/><path d="M6.5 8.5h3M8 8.5v3M6.5 10l1.5 1.5L9.5 10" fill="none" stroke="currentColor"/></svg>',
@@ -59,6 +83,11 @@ interface AppState {
   setMarkReadOnOpen: (value: boolean) => void;
   view: "inbox" | "all";
   setView: (view: "inbox" | "all") => void;
+  // Aborts any thread-list fetch (refresh or infinite-scroll) started by an
+  // earlier call, then returns a fresh signal for the caller's own fetch --
+  // so switching views/refreshing while a scroll fetch is in flight can't
+  // let that stale fetch's result land after the newer one's.
+  startThreadListFetch: () => AbortSignal;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -78,22 +107,39 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [markReadOnOpen, setMarkReadOnOpen] = useState(false);
   const [view, setView] = useState<"inbox" | "all">("inbox");
+  const threadListAbortController = useRef(new AbortController());
+
+  const startThreadListFetch = useCallback(() => {
+    threadListAbortController.current.abort();
+    threadListAbortController.current = new AbortController();
+    // Whatever fetch was in flight is now abandoned -- if it was an
+    // infinite-scroll append, its result will never arrive to clear this.
+    setLoadingMore(false);
+    return threadListAbortController.current.signal;
+  }, []);
 
   const refresh = useCallback(() => {
+    const signal = startThreadListFetch();
     setReachedEndOfInbox(false);
     setRefreshing(true);
-    google.script.run
-      .withSuccessHandler((threads: any[]) => {
+    runCancelable(
+      (onSuccess, onError) =>
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onError)
+          .listThreads(view, 0),
+      signal,
+      (threads: any[]) => {
         setRefreshing(false);
         setAllThreads(threads);
         setReachedEndOfInbox(threads.length < PAGE_SIZE);
-      })
-      .withFailureHandler((error: Error) => {
+      },
+      (error: Error) => {
         setRefreshing(false);
         fail(error);
-      })
-      .listThreads(view, 0);
-  }, [view]);
+      },
+    );
+  }, [view, startThreadListFetch]);
 
   useEffect(refresh, [refresh]);
 
@@ -116,6 +162,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
         setMarkReadOnOpen,
         view,
         setView,
+        startThreadListFetch,
       }}
     >
       {children}
@@ -307,6 +354,7 @@ function IconButton({
 function Topbar() {
   const {
     refreshing,
+    loadingMore,
     refresh,
     markReadOnOpen,
     setMarkReadOnOpen,
@@ -354,7 +402,7 @@ function Topbar() {
       <IconButton
         icon="refresh"
         title="Refresh"
-        pending={refreshing}
+        pending={refreshing || loadingMore}
         onClick={refresh}
       />
     </div>
@@ -602,6 +650,7 @@ function ThreadRows() {
     setAllThreads,
     setReachedEndOfInbox,
     view,
+    startThreadListFetch,
   } = useAppContext();
   const mainRef = useRef<HTMLDivElement>(null);
 
@@ -610,22 +659,35 @@ function ThreadRows() {
     const main = mainRef.current;
     if (!main) return;
     if (main.scrollTop + main.clientHeight < main.scrollHeight - 200) return;
+    const signal = startThreadListFetch();
     setLoadingMore(true);
-    google.script.run
-      .withSuccessHandler((threads: any[]) => {
+    runCancelable(
+      (onSuccess, onError) =>
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onError)
+          .listThreads(view, allThreads.length),
+      signal,
+      (threads: any[]) => {
         setLoadingMore(false);
         setReachedEndOfInbox(threads.length < PAGE_SIZE);
         setAllThreads((all) => {
           const seen = new Set(all.map((t) => t.id));
           return all.concat(threads.filter((t) => !seen.has(t.id)));
         });
-      })
-      .withFailureHandler((error: Error) => {
+      },
+      (error: Error) => {
         setLoadingMore(false);
         fail(error);
-      })
-      .listThreads(view, allThreads.length);
-  }, [loadingMore, reachedEndOfInbox, allThreads.length, view]);
+      },
+    );
+  }, [
+    loadingMore,
+    reachedEndOfInbox,
+    allThreads.length,
+    view,
+    startThreadListFetch,
+  ]);
 
   useEffect(maybeLoadMore, [maybeLoadMore, allThreads]);
 
