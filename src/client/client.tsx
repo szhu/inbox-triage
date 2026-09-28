@@ -652,13 +652,9 @@ function ThreadRows() {
     view,
     startThreadListFetch,
   } = useAppContext();
-  const mainRef = useRef<HTMLDivElement>(null);
 
-  const maybeLoadMore = useCallback(() => {
+  const loadMore = useCallback(() => {
     if (loadingMore || reachedEndOfInbox) return;
-    const main = mainRef.current;
-    if (!main) return;
-    if (main.scrollTop + main.clientHeight < main.scrollHeight - 200) return;
     const signal = startThreadListFetch();
     setLoadingMore(true);
     runCancelable(
@@ -689,10 +685,8 @@ function ThreadRows() {
     startThreadListFetch,
   ]);
 
-  useEffect(maybeLoadMore, [maybeLoadMore, allThreads]);
-
   return (
-    <div id="main" ref={mainRef} onScroll={maybeLoadMore}>
+    <div id="main">
       <div id="threads" hidden={allThreads.length === 0}>
         <div className="header">
           <span>Subject</span>
@@ -705,6 +699,15 @@ function ThreadRows() {
             <Row key={t.id} t={t} />
           ))}
         </div>
+        {reachedEndOfInbox ? null : (
+          <button
+            className="load-more-btn"
+            onClick={loadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        )}
       </div>
     </div>
   );

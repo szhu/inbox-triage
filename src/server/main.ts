@@ -204,6 +204,9 @@ const PAGE_HTML = `<!DOCTYPE html>
     body.pwa #topbar { padding-top: calc(0.6rem + env(safe-area-inset-top, 0px) + 2rem); }
     #senders { padding-bottom: env(safe-area-inset-bottom, 0px); }
     #threads .rows { padding-bottom: env(safe-area-inset-bottom, 0px); }
+    .load-more-btn { font: inherit; font-size: 0.85rem; cursor: pointer; display: block; margin: 0.8rem auto; padding: 0.4rem 1rem; border: 1px solid #ccc; border-radius: 3px; background: #fff; }
+    @media (hover: hover) { .load-more-btn:hover:not(:disabled) { background: #f0f0f0; } }
+    .load-more-btn:disabled { cursor: default; color: #999; }
     #threads .header { display: none; }
     #threads .row {
       display: grid;
