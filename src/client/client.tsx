@@ -131,6 +131,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
       signal,
       (threads: any[]) => {
         setRefreshing(false);
+        cacheThreadListMessages(threads);
         setAllThreads(threads);
         setReachedEndOfInbox(threads.length < PAGE_SIZE);
       },
@@ -213,6 +214,16 @@ function fetchThreadMessages(
         .getThreadMessages(threadId),
     onSuccess,
   );
+}
+
+// listThreads already fetches each thread's messages server-side (to
+// compute sender/senderGroup), so it ships them along too -- seed the
+// same cache fetchThreadMessages reads from, so opening one of these
+// threads doesn't re-fetch messages it was just sent a moment ago.
+function cacheThreadListMessages(threads: any[]) {
+  for (const t of threads) {
+    if (t.messages) callCache.set(`getThreadMessages:${t.id}`, t.messages);
+  }
 }
 
 // Bumped every time a different sender is selected, so an in-flight
@@ -666,6 +677,7 @@ function ThreadRows() {
       signal,
       (threads: any[]) => {
         setLoadingMore(false);
+        cacheThreadListMessages(threads);
         setReachedEndOfInbox(threads.length < PAGE_SIZE);
         setAllThreads((all) => {
           const seen = new Set(all.map((t) => t.id));

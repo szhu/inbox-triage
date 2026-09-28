@@ -18,6 +18,7 @@ function doGet(e: GoogleAppsScript.Events.DoGet) {
 function listThreads(view: "inbox" | "all", start: number) {
   const query = view === "inbox" ? "in:inbox" : "-in:trash -in:spam";
   const threads = GmailApp.search(query, start, 50);
+  const userEmail = Session.getActiveUser().getEmail();
   return threads.map((t) => {
     const messages = t.getMessages();
     const firstMessage = messages[0];
@@ -38,6 +39,10 @@ function listThreads(view: "inbox" | "all", start: number) {
       isUnread: t.isUnread(),
       isStarred: t.hasStarredMessages(),
       archived: !t.isInInbox(),
+      // Already fetched above to compute sender/senderGroup, so shipping it
+      // to the client too means opening this thread can skip a second
+      // fetch of the same messages via getThreadMessages.
+      messages: messages.map((m) => formatMessage(m, userEmail)),
     };
   });
 }
@@ -103,21 +108,26 @@ function groupForSender(sender: string): string {
 function getThreadMessages(threadId: string) {
   const thread = GmailApp.getThreadById(threadId);
   const userEmail = Session.getActiveUser().getEmail();
-  return thread.getMessages().map((m) => {
-    const from = m.getFrom();
-    return {
-      id: m.getId(),
-      from,
-      fromName: senderDisplayName(from),
-      to: m.getTo(),
-      cc: m.getCc(),
-      bcc: m.getBcc(),
-      date: m.getDate().toISOString(),
-      body: m.getBody(),
-      isUnread: m.isUnread(),
-      userEmail,
-    };
-  });
+  return thread.getMessages().map((m) => formatMessage(m, userEmail));
+}
+
+function formatMessage(
+  m: GoogleAppsScript.Gmail.GmailMessage,
+  userEmail: string,
+) {
+  const from = m.getFrom();
+  return {
+    id: m.getId(),
+    from,
+    fromName: senderDisplayName(from),
+    to: m.getTo(),
+    cc: m.getCc(),
+    bcc: m.getBcc(),
+    date: m.getDate().toISOString(),
+    body: m.getBody(),
+    isUnread: m.isUnread(),
+    userEmail,
+  };
 }
 
 function setThreadArchived(threadId: string, archived: boolean) {
