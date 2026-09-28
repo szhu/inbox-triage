@@ -74,6 +74,13 @@ function renderSenderList() {
   );
 }
 
+const rowPendingAction: Record<string, "archive" | "read" | "star" | null> = {};
+const threadRowsRoot = createRoot(document.querySelector("#threads .rows")!);
+function renderThreadRows() {
+  threadRowsRoot.render(<ThreadRows />);
+  document.getElementById("threads")!.hidden = false;
+}
+
 refresh();
 
 // A cache-and-dedupe layer in front of server calls whose results never go
@@ -197,56 +204,6 @@ function maybeLoadMore() {
       fail(error);
     })
     .listInboxThreads(allThreads.length);
-}
-
-function buildRow(t: any): HTMLElement {
-  let row: HTMLElement;
-  row = El(
-    {
-      "tag": "div",
-      "class": "row",
-      "data-sender-group": t.senderGroup,
-      "data-thread-id": t.id,
-      "onclick": () => toggleThread(t.id, row),
-    },
-    El({ tag: "span", class: "cell subject" }, t.subject),
-    El(
-      { tag: "span", class: "cell date" },
-      new Date(t.date).toLocaleDateString(undefined, {
-        month: "numeric",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      }),
-    ),
-    El({ tag: "span", class: "cell count" }, String(t.messageCount)),
-    El(
-      { tag: "span", class: "cell actions" },
-      IconButton({
-        icon: "archive",
-        title: "Archive",
-        onclick: (btn) => archiveOne(t.id, row, btn),
-      }),
-      IconButton({
-        icon: t.isUnread ? "unread" : "read",
-        title: "Toggle read",
-        onclick: (btn) => toggleThreadRead(t.id, btn),
-      }),
-      IconButton({
-        icon: t.isStarred ? "star" : "unstar",
-        title: "Toggle star",
-        onclick: (btn) => toggleThreadStarred(t.id, btn),
-      }),
-    ),
-  );
-  return row;
-}
-
-function renderThreadRows() {
-  const rows = document.querySelector("#threads .rows")!;
-  rows.innerHTML = "";
-  for (const t of allThreads) rows.appendChild(buildRow(t));
-  document.getElementById("threads")!.hidden = false;
 }
 
 function render() {
@@ -457,13 +414,25 @@ function renderMessages(messages: any[], cell: HTMLElement, threadId: string) {
   }
 }
 
-function archiveOne(threadId: string, tr: HTMLElement, btn: HTMLElement) {
+function archiveOne(threadId: string) {
   const t = allThreads.find((t) => t.id === threadId);
   const nowArchived = !t.archived;
-  withPending(btn, renderSenderList).setThreadArchived(threadId, nowArchived);
+  rowPendingAction[threadId] = "archive";
+  renderThreadRows();
+  google.script.run
+    .withSuccessHandler(() => {
+      rowPendingAction[threadId] = null;
+      renderThreadRows();
+      renderSenderList();
+    })
+    .withFailureHandler((error: Error) => {
+      rowPendingAction[threadId] = null;
+      renderThreadRows();
+      fail(error);
+    })
+    .setThreadArchived(threadId, nowArchived);
   t.archived = nowArchived;
-  tr.classList.toggle("archived", nowArchived);
-  btn.innerHTML = ICONS[nowArchived ? "unarchive" : "archive"];
+  renderThreadRows();
 }
 
 function archiveSender(group: string) {
@@ -492,20 +461,45 @@ function archiveSender(group: string) {
   renderSenderList();
 }
 
-function toggleThreadRead(threadId: string, btn: HTMLButtonElement) {
+function toggleThreadRead(threadId: string) {
   const t = allThreads.find((t) => t.id === threadId);
   const nowRead = t.isUnread;
-  withPending(btn, renderSenderList).markThreadRead(threadId, nowRead);
+  rowPendingAction[threadId] = "read";
+  renderThreadRows();
+  google.script.run
+    .withSuccessHandler(() => {
+      rowPendingAction[threadId] = null;
+      renderThreadRows();
+      renderSenderList();
+    })
+    .withFailureHandler((error: Error) => {
+      rowPendingAction[threadId] = null;
+      renderThreadRows();
+      fail(error);
+    })
+    .markThreadRead(threadId, nowRead);
   t.isUnread = !nowRead;
-  btn.innerHTML = ICONS[t.isUnread ? "unread" : "read"];
+  renderThreadRows();
 }
 
-function toggleThreadStarred(threadId: string, btn: HTMLButtonElement) {
+function toggleThreadStarred(threadId: string) {
   const t = allThreads.find((t) => t.id === threadId);
   const nowStarred = !t.isStarred;
-  withPending(btn).setThreadStarred(threadId, nowStarred);
+  rowPendingAction[threadId] = "star";
+  renderThreadRows();
+  google.script.run
+    .withSuccessHandler(() => {
+      rowPendingAction[threadId] = null;
+      renderThreadRows();
+    })
+    .withFailureHandler((error: Error) => {
+      rowPendingAction[threadId] = null;
+      renderThreadRows();
+      fail(error);
+    })
+    .setThreadStarred(threadId, nowStarred);
   t.isStarred = nowStarred;
-  btn.innerHTML = ICONS[nowStarred ? "star" : "unstar"];
+  renderThreadRows();
 }
 
 // Set right before navigating away (e.g. the double-click reload), so
@@ -648,6 +642,84 @@ function SenderList({
           onSelect={() => onSelectGroup(group)}
           pending={archiveSenderPending === group}
           onArchiveAll={() => onArchiveSender(group)}
+        />
+      ))}
+    </>
+  );
+}
+
+function Row({
+  t,
+  hidden,
+  pendingAction,
+  onArchive,
+  onToggleRead,
+  onToggleStar,
+}: {
+  t: any;
+  hidden: boolean;
+  pendingAction: "archive" | "read" | "star" | null;
+  onArchive: () => void;
+  onToggleRead: () => void;
+  onToggleStar: () => void;
+}) {
+  return (
+    <div
+      className={
+        "row" + (hidden ? " hidden-row" : "") + (t.archived ? " archived" : "")
+      }
+      data-sender-group={t.senderGroup}
+      data-thread-id={t.id}
+    >
+      <span className="cell subject">{t.subject}</span>
+      <span className="cell date">
+        {new Date(t.date).toLocaleDateString(undefined, {
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })}
+      </span>
+      <span className="cell count">{String(t.messageCount)}</span>
+      <span className="cell actions">
+        <ReactIconButton
+          icon={t.archived ? "unarchive" : "archive"}
+          title="Archive"
+          pending={pendingAction === "archive"}
+          onClick={onArchive}
+        />
+        <ReactIconButton
+          icon={t.isUnread ? "unread" : "read"}
+          title="Toggle read"
+          pending={pendingAction === "read"}
+          onClick={onToggleRead}
+        />
+        <ReactIconButton
+          icon={t.isStarred ? "star" : "unstar"}
+          title="Toggle star"
+          pending={pendingAction === "star"}
+          onClick={onToggleStar}
+        />
+      </span>
+    </div>
+  );
+}
+
+function ThreadRows() {
+  return (
+    <>
+      {allThreads.map((t) => (
+        <Row
+          key={t.id}
+          t={t}
+          hidden={
+            selectedSenderGroup !== null &&
+            t.senderGroup !== selectedSenderGroup
+          }
+          pendingAction={rowPendingAction[t.id] ?? null}
+          onArchive={() => archiveOne(t.id)}
+          onToggleRead={() => toggleThreadRead(t.id)}
+          onToggleStar={() => toggleThreadStarred(t.id)}
         />
       ))}
     </>
