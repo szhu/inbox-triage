@@ -188,7 +188,7 @@ const PAGE_HTML = `<!DOCTYPE html>
     #senders .sender-name { overflow: hidden; text-overflow: ellipsis; color: #666; font-size: 0.8rem; }
     #senders .unread-count { color: #666; margin-left: 0.5rem; min-width: 1.2rem; text-align: right; }
     #senders .icon-btn { margin-left: 0.5rem; }
-    .archived { opacity: 0.35; }
+    .archived > *:not(.actions):not(.icon-btn) { opacity: 0.35; }
     #main { flex: 1; overflow-y: auto; }
     body.pwa #topbar { padding-top: calc(0.6rem + env(safe-area-inset-top, 0px) + 2rem); }
     #senders { padding-bottom: env(safe-area-inset-bottom, 0px); }
