@@ -3,9 +3,10 @@
 // to GmailApp etc., and shares nothing with this file at runtime). Talks to
 // the server only through google.script.run.
 
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { El } from "./el";
-import { sanitizeHtmlToNode } from "./sanitizeHtml";
+import { sanitizeHtmlToString } from "./sanitizeHtml";
 
 interface ScriptRunner {
   withSuccessHandler(callback: (value: any) => void): ScriptRunner;
@@ -308,110 +309,22 @@ function IconButton({
 
 function selectSender(group: string) {
   selectedSenderGroup = group;
-  renderSenderList();
-  // Threads loaded in the background (infinite scroll) never get a row
-  // built on the right side, since that side intentionally isn't touched
-  // by a background load -- rebuild it here so switching senders always
-  // shows all of that sender's threads, not just the ones from the first
-  // page.
-  renderThreadRows();
-  const matchingRows: HTMLElement[] = [];
-  for (const row of document.querySelectorAll<HTMLElement>(
-    "#threads .rows > .row",
-  )) {
-    const matches = row.dataset.senderGroup === group;
-    row.classList.toggle("hidden-row", !matches);
-    if (matches) matchingRows.push(row);
-  }
+  const matching = allThreads.filter((t) => t.senderGroup === group);
   // A sender with just one thread has nothing to pick between -- open it
-  // immediately instead of making that a required extra click.
-  if (matchingRows.length === 1) {
-    toggleThread(matchingRows[0].dataset.threadId!, matchingRows[0]);
-  }
+  // immediately instead of making that a required extra click. Otherwise,
+  // close whatever was open if it's not one of this sender's threads, so
+  // switching senders doesn't leave a stale thread's messages rendered
+  // under the new sender's rows.
+  openThreadId =
+    matching.length === 1
+      ? matching[0].id
+      : matching.some((t) => t.id === openThreadId)
+        ? openThreadId
+        : null;
+  renderSenderList();
+  renderThreadRows();
   senderPrefetchGeneration++;
   prefetchSenderMessages(group, senderPrefetchGeneration);
-}
-
-function toggleThread(threadId: string, tr: HTMLElement) {
-  const existing = tr.nextElementSibling as HTMLElement | null;
-  if (existing && existing.dataset.messagesFor === threadId) {
-    existing.remove();
-    tr.classList.remove("open");
-    return;
-  }
-  document.querySelectorAll("[data-messages-for]").forEach((r) => r.remove());
-  document
-    .querySelectorAll("#threads .row.open")
-    .forEach((r) => r.classList.remove("open"));
-  tr.classList.add("open");
-  const cell = El({ tag: "div", class: "cell messages-cell" }, "Loading...");
-  const row = El(
-    {
-      "tag": "div",
-      "class": "row messages-row",
-      "data-messages-for": threadId,
-    },
-    cell,
-  );
-  tr.after(row);
-  fetchThreadMessages(threadId, (messages) =>
-    renderMessages(messages, cell, threadId),
-  );
-}
-
-function renderMessages(messages: any[], cell: HTMLElement, threadId: string) {
-  cell.innerHTML = "";
-  cell.appendChild(
-    El(
-      {},
-      El(
-        {
-          tag: "a",
-          class: "open-in-gmail",
-          href:
-            "https://mail.google.com/mail/?authuser=" +
-            messages[0].userEmail +
-            "#all/" +
-            threadId,
-          target: "_blank",
-        },
-        "Open thread in Gmail",
-      ),
-    ),
-  );
-  for (const m of messages) {
-    const address = m.from.match(/<([^>]+)>/)?.[1] ?? m.from;
-    const header = El(
-      { tag: "div", class: "message-header" },
-      El(
-        { tag: "div", class: "message-header-row" },
-        m.fromName
-          ? El(
-              "span",
-              El({ tag: "span", class: "message-from-name" }, m.fromName),
-              " <" + address + ">",
-            )
-          : El({ tag: "span", class: "message-from-name" }, m.from),
-        El("span", new Date(m.date).toLocaleString()),
-      ),
-      m.to
-        ? El({ tag: "div", class: "message-header-recipients" }, "To: " + m.to)
-        : "",
-      m.cc
-        ? El({ tag: "div", class: "message-header-recipients" }, "Cc: " + m.cc)
-        : "",
-      m.bcc
-        ? El(
-            { tag: "div", class: "message-header-recipients" },
-            "Bcc: " + m.bcc,
-          )
-        : "",
-    );
-    const bodyEl = El({ tag: "div", class: "message-body" });
-    bodyEl.appendChild(sanitizeHtmlToNode(m.body));
-    const div = El({ tag: "div", class: "messages" }, header, bodyEl);
-    cell.appendChild(div);
-  }
 }
 
 function archiveOne(threadId: string) {
@@ -651,6 +564,8 @@ function SenderList({
 function Row({
   t,
   hidden,
+  isOpen,
+  onToggleOpen,
   pendingAction,
   onArchive,
   onToggleRead,
@@ -658,50 +573,59 @@ function Row({
 }: {
   t: any;
   hidden: boolean;
+  isOpen: boolean;
+  onToggleOpen: () => void;
   pendingAction: "archive" | "read" | "star" | null;
   onArchive: () => void;
   onToggleRead: () => void;
   onToggleStar: () => void;
 }) {
   return (
-    <div
-      className={
-        "row" + (hidden ? " hidden-row" : "") + (t.archived ? " archived" : "")
-      }
-      data-sender-group={t.senderGroup}
-      data-thread-id={t.id}
-    >
-      <span className="cell subject">{t.subject}</span>
-      <span className="cell date">
-        {new Date(t.date).toLocaleDateString(undefined, {
-          month: "numeric",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        })}
-      </span>
-      <span className="cell count">{String(t.messageCount)}</span>
-      <span className="cell actions">
-        <ReactIconButton
-          icon={t.archived ? "unarchive" : "archive"}
-          title="Archive"
-          pending={pendingAction === "archive"}
-          onClick={onArchive}
-        />
-        <ReactIconButton
-          icon={t.isUnread ? "unread" : "read"}
-          title="Toggle read"
-          pending={pendingAction === "read"}
-          onClick={onToggleRead}
-        />
-        <ReactIconButton
-          icon={t.isStarred ? "star" : "unstar"}
-          title="Toggle star"
-          pending={pendingAction === "star"}
-          onClick={onToggleStar}
-        />
-      </span>
-    </div>
+    <>
+      <div
+        className={
+          "row" +
+          (hidden ? " hidden-row" : "") +
+          (t.archived ? " archived" : "") +
+          (isOpen ? " open" : "")
+        }
+        data-sender-group={t.senderGroup}
+        data-thread-id={t.id}
+        onClick={onToggleOpen}
+      >
+        <span className="cell subject">{t.subject}</span>
+        <span className="cell date">
+          {new Date(t.date).toLocaleDateString(undefined, {
+            month: "numeric",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </span>
+        <span className="cell count">{String(t.messageCount)}</span>
+        <span className="cell actions">
+          <ReactIconButton
+            icon={t.archived ? "unarchive" : "archive"}
+            title="Archive"
+            pending={pendingAction === "archive"}
+            onClick={onArchive}
+          />
+          <ReactIconButton
+            icon={t.isUnread ? "unread" : "read"}
+            title="Toggle read"
+            pending={pendingAction === "read"}
+            onClick={onToggleRead}
+          />
+          <ReactIconButton
+            icon={t.isStarred ? "star" : "unstar"}
+            title="Toggle star"
+            pending={pendingAction === "star"}
+            onClick={onToggleStar}
+          />
+        </span>
+      </div>
+      {isOpen ? <Messages threadId={t.id} /> : null}
+    </>
   );
 }
 
@@ -716,6 +640,11 @@ function ThreadRows() {
             selectedSenderGroup !== null &&
             t.senderGroup !== selectedSenderGroup
           }
+          isOpen={openThreadId === t.id}
+          onToggleOpen={() => {
+            openThreadId = openThreadId === t.id ? null : t.id;
+            renderThreadRows();
+          }}
           pendingAction={rowPendingAction[t.id] ?? null}
           onArchive={() => archiveOne(t.id)}
           onToggleRead={() => toggleThreadRead(t.id)}
@@ -723,5 +652,80 @@ function ThreadRows() {
         />
       ))}
     </>
+  );
+}
+
+function Message({ m }: { m: any }) {
+  const address = m.from.match(/<([^>]+)>/)?.[1] ?? m.from;
+  return (
+    <div className="messages">
+      <div className="message-header">
+        <div className="message-header-row">
+          {m.fromName ? (
+            <span>
+              <span className="message-from-name">{m.fromName}</span>
+              {" <" + address + ">"}
+            </span>
+          ) : (
+            <span className="message-from-name">{m.from}</span>
+          )}
+          <span>{new Date(m.date).toLocaleString()}</span>
+        </div>
+        {m.to ? (
+          <div className="message-header-recipients">To: {m.to}</div>
+        ) : null}
+        {m.cc ? (
+          <div className="message-header-recipients">Cc: {m.cc}</div>
+        ) : null}
+        {m.bcc ? (
+          <div className="message-header-recipients">Bcc: {m.bcc}</div>
+        ) : null}
+      </div>
+      <div
+        className="message-body"
+        dangerouslySetInnerHTML={{ __html: sanitizeHtmlToString(m.body) }}
+      />
+    </div>
+  );
+}
+
+function Messages({ threadId }: { threadId: string }) {
+  const [messages, setMessages] = useState<any[] | null>(null);
+
+  useEffect(() => {
+    setMessages(null);
+    fetchThreadMessages(threadId, setMessages);
+  }, [threadId]);
+
+  if (messages === null) {
+    return (
+      <div className="row messages-row" data-messages-for={threadId}>
+        <div className="cell messages-cell">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="row messages-row" data-messages-for={threadId}>
+      <div className="cell messages-cell">
+        <div>
+          <a
+            className="open-in-gmail"
+            href={
+              "https://mail.google.com/mail/?authuser=" +
+              messages[0].userEmail +
+              "#all/" +
+              threadId
+            }
+            target="_blank"
+          >
+            Open thread in Gmail
+          </a>
+        </div>
+        {messages.map((m) => (
+          <Message key={m.id} m={m} />
+        ))}
+      </div>
+    </div>
   );
 }
