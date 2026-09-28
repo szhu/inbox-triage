@@ -149,7 +149,7 @@ const PAGE_HTML = `<!DOCTYPE html>
 <head>
   <base target="_top">
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; display: flex; flex-direction: column; height: 100vh; transition: opacity 0.2s ease-in-out; }
+    body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; display: flex; flex-direction: column; height: 100vh; transition: opacity 0.2s ease-in-out; overflow-wrap: break-word; }
     button.icon-btn { font: inherit; cursor: pointer; width: 1.6rem; height: 1.6rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #ccc; border-radius: 3px; background: #fff; position: relative; }
     @media (hover: hover) { button.icon-btn:hover { background: #f0f0f0; } }
     button.icon-btn svg { width: 14px; height: 14px; }
@@ -224,6 +224,7 @@ const PAGE_HTML = `<!DOCTYPE html>
     .messages + .messages { margin-top: 1rem; }
     .message-header { color: #333; font-size: 0.8rem; background: #eee; padding: 0.4rem 0.8rem; margin-bottom: 0.6rem; border-radius: 4px; }
     .message-header-row { display: flex; justify-content: space-between; }
+    .message-header-row > * { min-width: 0; }
     .message-header-recipients { margin-top: 0.2rem; color: #666; }
     .message-from-name { font-weight: 600; }
     .message-body { padding: 0 0.8rem; word-wrap: break-word; }
