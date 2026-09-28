@@ -15,8 +15,9 @@ function doGet(e: GoogleAppsScript.Events.DoGet) {
     .addMetaTag("apple-mobile-web-app-capable", "yes");
 }
 
-function listInboxThreads(start: number) {
-  const threads = GmailApp.search("in:inbox", start, 50);
+function listThreads(view: "inbox" | "all", start: number) {
+  const query = view === "inbox" ? "in:inbox" : "-in:trash -in:spam";
+  const threads = GmailApp.search(query, start, 50);
   return threads.map((t) => {
     const messages = t.getMessages();
     const firstMessage = messages[0];
@@ -36,6 +37,7 @@ function listInboxThreads(start: number) {
       messageCount: t.getMessageCount(),
       isUnread: t.isUnread(),
       isStarred: t.hasStarredMessages(),
+      archived: !t.isInInbox(),
     };
   });
 }
@@ -155,6 +157,11 @@ const PAGE_HTML = `<!DOCTYPE html>
     @media (hover: hover) { button.toggle-btn:hover { background: #f0f0f0; } }
     .toggle-btn-icon { display: inline-flex; width: 14px; height: 14px; flex-shrink: 0; }
     .toggle-btn-icon svg { width: 14px; height: 14px; }
+    .view-switch { display: flex; border: 1px solid #ccc; border-radius: 3px; overflow: hidden; }
+    .view-switch-option { font: inherit; font-size: 0.85rem; cursor: pointer; padding: 0.3rem 0.6rem; border: none; background: #fff; }
+    .view-switch-option + .view-switch-option { border-left: 1px solid #ccc; }
+    .view-switch-option.on { background: #eee; }
+    @media (hover: hover) { .view-switch-option:not(.on):hover { background: #f0f0f0; } }
     @media (hover: hover) { button.icon-btn:hover { background: #f0f0f0; } }
     button.icon-btn svg { width: 14px; height: 14px; }
     button.icon-btn.pending { border-color: transparent; }

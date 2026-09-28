@@ -57,6 +57,8 @@ interface AppState {
   refresh: () => void;
   markReadOnOpen: boolean;
   setMarkReadOnOpen: (value: boolean) => void;
+  view: "inbox" | "all";
+  setView: (view: "inbox" | "all") => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -75,6 +77,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [markReadOnOpen, setMarkReadOnOpen] = useState(false);
+  const [view, setView] = useState<"inbox" | "all">("inbox");
 
   const refresh = useCallback(() => {
     setReachedEndOfInbox(false);
@@ -89,8 +92,8 @@ function AppProvider({ children }: { children: React.ReactNode }) {
         setRefreshing(false);
         fail(error);
       })
-      .listInboxThreads(0);
-  }, []);
+      .listThreads(view, 0);
+  }, [view]);
 
   useEffect(refresh, [refresh]);
 
@@ -111,6 +114,8 @@ function AppProvider({ children }: { children: React.ReactNode }) {
         refresh,
         markReadOnOpen,
         setMarkReadOnOpen,
+        view,
+        setView,
       }}
     >
       {children}
@@ -300,8 +305,14 @@ function IconButton({
 }
 
 function Topbar() {
-  const { refreshing, refresh, markReadOnOpen, setMarkReadOnOpen } =
-    useAppContext();
+  const {
+    refreshing,
+    refresh,
+    markReadOnOpen,
+    setMarkReadOnOpen,
+    view,
+    setView,
+  } = useAppContext();
   return (
     <div id="topbar">
       <h1
@@ -314,6 +325,20 @@ function Topbar() {
       >
         Inbox Triage
       </h1>
+      <div className="view-switch">
+        <button
+          className={"view-switch-option" + (view === "inbox" ? " on" : "")}
+          onClick={() => setView("inbox")}
+        >
+          Inbox
+        </button>
+        <button
+          className={"view-switch-option" + (view === "all" ? " on" : "")}
+          onClick={() => setView("all")}
+        >
+          All
+        </button>
+      </div>
       <button
         className="toggle-btn"
         onClick={() => setMarkReadOnOpen(!markReadOnOpen)}
@@ -576,6 +601,7 @@ function ThreadRows() {
     setLoadingMore,
     setAllThreads,
     setReachedEndOfInbox,
+    view,
   } = useAppContext();
   const mainRef = useRef<HTMLDivElement>(null);
 
@@ -598,8 +624,8 @@ function ThreadRows() {
         setLoadingMore(false);
         fail(error);
       })
-      .listInboxThreads(allThreads.length);
-  }, [loadingMore, reachedEndOfInbox, allThreads.length]);
+      .listThreads(view, allThreads.length);
+  }, [loadingMore, reachedEndOfInbox, allThreads.length, view]);
 
   useEffect(maybeLoadMore, [maybeLoadMore, allThreads]);
 
