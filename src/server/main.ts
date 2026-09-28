@@ -174,6 +174,7 @@ const PAGE_HTML = `<!DOCTYPE html>
     @keyframes marching-ants {
       to { --ants-angle: 360deg; }
     }
+    #app { display: flex; flex-direction: column; height: 100%; }
     #topbar { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; border-bottom: 1px solid #ddd; flex-shrink: 0; }
     #topbar h1 { font-size: 1.1rem; margin: 0 auto 0 0; }
     #body { display: flex; flex: 1; overflow: hidden; }
@@ -249,16 +250,7 @@ const PAGE_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body class="__BODY_CLASS__">
-  <div id="topbar"></div>
-  <div id="body">
-    <div id="senders"></div>
-    <div id="main">
-      <div id="threads" hidden>
-        <div class="header"><span>Subject</span><span>Date</span><span>#</span><span></span></div>
-        <div class="rows"></div>
-      </div>
-    </div>
-  </div>
+  <div id="app"></div>
   <script>
     __PAGE_DATA__
     __CLIENT_JS__

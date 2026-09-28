@@ -3,9 +3,15 @@
 // to GmailApp etc., and shares nothing with this file at runtime). Talks to
 // the server only through google.script.run.
 
-import { useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { createRoot } from "react-dom/client";
-import { El } from "./el";
 import { sanitizeHtmlToString } from "./sanitizeHtml";
 
 interface ScriptRunner {
@@ -14,22 +20,6 @@ interface ScriptRunner {
   [serverFunction: string]: any;
 }
 declare const google: { script: { run: ScriptRunner } };
-
-// Marks el as pending (via a CSS class) for the duration of a server call,
-// so in-flight vs. completed is visible without any per-call bookkeeping.
-function withPending(
-  el: HTMLElement,
-  onSuccess?: (value: any) => void,
-): ScriptRunner {
-  el.classList.add("pending");
-  const settle = (handler?: (value: any) => void) => (value: any) => {
-    el.classList.remove("pending");
-    handler?.(value);
-  };
-  return google.script.run
-    .withSuccessHandler(settle(onSuccess))
-    .withFailureHandler(settle(fail));
-}
 
 const ICONS = {
   archive:
@@ -47,42 +37,77 @@ const ICONS = {
 };
 
 const PAGE_SIZE = 50;
-let allThreads: any[] = [];
-let reachedEndOfInbox = false;
-let loadingMore = false;
 
-let topbarRefreshing = false;
-const topbarRoot = createRoot(document.getElementById("topbar")!);
-function renderTopbar() {
-  topbarRoot.render(
-    <Topbar refreshing={topbarRefreshing} onRefresh={refresh} />,
+interface AppState {
+  allThreads: any[];
+  setAllThreads: React.Dispatch<React.SetStateAction<any[]>>;
+  reachedEndOfInbox: boolean;
+  setReachedEndOfInbox: (value: boolean) => void;
+  loadingMore: boolean;
+  setLoadingMore: (value: boolean) => void;
+  refreshing: boolean;
+  selectedGroup: string | null;
+  setSelectedGroup: (group: string | null) => void;
+  openThreadId: string | null;
+  setOpenThreadId: (threadId: string | null) => void;
+  refresh: () => void;
+}
+
+const AppContext = createContext<AppState | null>(null);
+
+function useAppContext(): AppState {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useAppContext used outside AppProvider");
+  return ctx;
+}
+
+function AppProvider({ children }: { children: React.ReactNode }) {
+  const [allThreads, setAllThreads] = useState<any[]>([]);
+  const [reachedEndOfInbox, setReachedEndOfInbox] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    setReachedEndOfInbox(false);
+    setRefreshing(true);
+    google.script.run
+      .withSuccessHandler((threads: any[]) => {
+        setRefreshing(false);
+        setAllThreads(threads);
+        setReachedEndOfInbox(threads.length < PAGE_SIZE);
+      })
+      .withFailureHandler((error: Error) => {
+        setRefreshing(false);
+        fail(error);
+      })
+      .listInboxThreads(0);
+  }, []);
+
+  useEffect(refresh, [refresh]);
+
+  return (
+    <AppContext.Provider
+      value={{
+        allThreads,
+        setAllThreads,
+        reachedEndOfInbox,
+        setReachedEndOfInbox,
+        loadingMore,
+        setLoadingMore,
+        refreshing,
+        selectedGroup,
+        setSelectedGroup,
+        openThreadId,
+        setOpenThreadId,
+        refresh,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
   );
 }
-renderTopbar();
-
-let selectedSenderGroup: string | null = null;
-let openThreadId: string | null = null;
-let archiveSenderPending: string | null = null;
-const sendersRoot = createRoot(document.getElementById("senders")!);
-function renderSenderList() {
-  sendersRoot.render(
-    <SenderList
-      selectedGroup={selectedSenderGroup}
-      onSelectGroup={selectSender}
-      archiveSenderPending={archiveSenderPending}
-      onArchiveSender={archiveSender}
-    />,
-  );
-}
-
-const rowPendingAction: Record<string, "archive" | "read" | "star" | null> = {};
-const threadRowsRoot = createRoot(document.querySelector("#threads .rows")!);
-function renderThreadRows() {
-  threadRowsRoot.render(<ThreadRows />);
-  document.getElementById("threads")!.hidden = false;
-}
-
-refresh();
 
 // A cache-and-dedupe layer in front of server calls whose results never go
 // stale for a given key (e.g. a thread's messages, which are immutable once
@@ -137,7 +162,11 @@ let senderPrefetchGeneration = 0;
 // Prefetches (and caches) messages for every thread in a sender's group in
 // the background, one at a time, so opening any of them afterward is
 // instant. Stops as soon as a different sender is selected.
-function prefetchSenderMessages(group: string, generation: number) {
+function prefetchSenderMessages(
+  group: string,
+  generation: number,
+  allThreads: any[],
+) {
   const threadIds = allThreads
     .filter((t) => t.senderGroup === group)
     .map((t) => t.id)
@@ -155,67 +184,7 @@ function prefetchSenderMessages(group: string, generation: number) {
   next();
 }
 
-document.getElementById("main")!.addEventListener("scroll", maybeLoadMore);
-
 declare const PAGE_DATA: { appUrl: string };
-
-// Secret shortcut for the PWA install, where there's no browser chrome to
-// hard-reload from: double-clicking the title reloads the whole page.
-document.getElementById("app-title")!.addEventListener("dblclick", () => {
-  navigatingAway = true;
-  document.body.style.opacity = "0";
-  window.top!.location.href = PAGE_DATA.appUrl;
-});
-
-function refresh() {
-  reachedEndOfInbox = false;
-  topbarRefreshing = true;
-  renderTopbar();
-  google.script.run
-    .withSuccessHandler((threads: any[]) => {
-      topbarRefreshing = false;
-      renderTopbar();
-      allThreads = threads;
-      reachedEndOfInbox = threads.length < PAGE_SIZE;
-      render();
-    })
-    .withFailureHandler((error: Error) => {
-      topbarRefreshing = false;
-      renderTopbar();
-      fail(error);
-    })
-    .listInboxThreads(0);
-}
-
-function maybeLoadMore() {
-  if (loadingMore || reachedEndOfInbox) return;
-  const main = document.getElementById("main")!;
-  if (main.scrollTop + main.clientHeight < main.scrollHeight - 200) return;
-  loadingMore = true;
-  google.script.run
-    .withSuccessHandler((threads: any[]) => {
-      loadingMore = false;
-      reachedEndOfInbox = threads.length < PAGE_SIZE;
-      allThreads = allThreads.concat(threads);
-      renderSenderList();
-      maybeLoadMore();
-    })
-    .withFailureHandler((error: Error) => {
-      loadingMore = false;
-      fail(error);
-    })
-    .listInboxThreads(allThreads.length);
-}
-
-function render() {
-  renderThreadRows();
-  if (!selectedSenderGroup && allThreads.length > 0) {
-    selectSender(allThreads[0].senderGroup);
-  } else {
-    renderSenderList();
-  }
-  maybeLoadMore();
-}
 
 // Shows who sent the most recent thread in the group, plus how many other
 // distinct people/senders have also sent one -- e.g. "Aria Kovalovich +2"
@@ -284,137 +253,6 @@ function senderGroupSummary(threads: any[]): {
   return { name: recentName, othersCount: others.size };
 }
 
-function IconButton({
-  icon,
-  title,
-  onclick,
-}: {
-  icon: keyof typeof ICONS;
-  title: string;
-  onclick: (btn: HTMLButtonElement) => void;
-}): HTMLButtonElement {
-  let btn: HTMLButtonElement;
-  btn = El({
-    tag: "button",
-    class: "icon-btn",
-    title,
-    onclick: (e: Event) => {
-      e.stopPropagation();
-      onclick(btn);
-    },
-  }) as HTMLButtonElement;
-  btn.innerHTML = ICONS[icon];
-  return btn;
-}
-
-function selectSender(group: string) {
-  selectedSenderGroup = group;
-  const matching = allThreads.filter((t) => t.senderGroup === group);
-  // A sender with just one thread has nothing to pick between -- open it
-  // immediately instead of making that a required extra click. Otherwise,
-  // close whatever was open if it's not one of this sender's threads, so
-  // switching senders doesn't leave a stale thread's messages rendered
-  // under the new sender's rows.
-  openThreadId =
-    matching.length === 1
-      ? matching[0].id
-      : matching.some((t) => t.id === openThreadId)
-        ? openThreadId
-        : null;
-  renderSenderList();
-  renderThreadRows();
-  senderPrefetchGeneration++;
-  prefetchSenderMessages(group, senderPrefetchGeneration);
-}
-
-function archiveOne(threadId: string) {
-  const t = allThreads.find((t) => t.id === threadId);
-  const nowArchived = !t.archived;
-  rowPendingAction[threadId] = "archive";
-  renderThreadRows();
-  google.script.run
-    .withSuccessHandler(() => {
-      rowPendingAction[threadId] = null;
-      renderThreadRows();
-      renderSenderList();
-    })
-    .withFailureHandler((error: Error) => {
-      rowPendingAction[threadId] = null;
-      renderThreadRows();
-      fail(error);
-    })
-    .setThreadArchived(threadId, nowArchived);
-  t.archived = nowArchived;
-  renderThreadRows();
-}
-
-function archiveSender(group: string) {
-  const toArchive = allThreads.filter(
-    (t) => t.senderGroup === group && !t.archived,
-  );
-  archiveSenderPending = group;
-  renderSenderList();
-  google.script.run
-    .withSuccessHandler(() => {
-      archiveSenderPending = null;
-      renderSenderList();
-    })
-    .withFailureHandler((error: Error) => {
-      archiveSenderPending = null;
-      renderSenderList();
-      fail(error);
-    })
-    .archiveThreads(toArchive.map((t) => t.id));
-  for (const t of toArchive) {
-    t.archived = true;
-    document
-      .querySelector(`[data-thread-id="${t.id}"]`)
-      ?.classList.add("archived");
-  }
-  renderSenderList();
-}
-
-function toggleThreadRead(threadId: string) {
-  const t = allThreads.find((t) => t.id === threadId);
-  const nowRead = t.isUnread;
-  rowPendingAction[threadId] = "read";
-  renderThreadRows();
-  google.script.run
-    .withSuccessHandler(() => {
-      rowPendingAction[threadId] = null;
-      renderThreadRows();
-      renderSenderList();
-    })
-    .withFailureHandler((error: Error) => {
-      rowPendingAction[threadId] = null;
-      renderThreadRows();
-      fail(error);
-    })
-    .markThreadRead(threadId, nowRead);
-  t.isUnread = !nowRead;
-  renderThreadRows();
-}
-
-function toggleThreadStarred(threadId: string) {
-  const t = allThreads.find((t) => t.id === threadId);
-  const nowStarred = !t.isStarred;
-  rowPendingAction[threadId] = "star";
-  renderThreadRows();
-  google.script.run
-    .withSuccessHandler(() => {
-      rowPendingAction[threadId] = null;
-      renderThreadRows();
-    })
-    .withFailureHandler((error: Error) => {
-      rowPendingAction[threadId] = null;
-      renderThreadRows();
-      fail(error);
-    })
-    .setThreadStarred(threadId, nowStarred);
-  t.isStarred = nowStarred;
-  renderThreadRows();
-}
-
 // Set right before navigating away (e.g. the double-click reload), so
 // fail() can ignore errors from requests the navigation aborted in flight
 // instead of alerting on a spurious error the user didn't cause.
@@ -428,7 +266,7 @@ function fail(error: Error) {
   );
 }
 
-function ReactIconButton({
+function IconButton({
   icon,
   title,
   onClick,
@@ -452,15 +290,10 @@ function ReactIconButton({
   );
 }
 
-function Topbar({
-  refreshing,
-  onRefresh,
-}: {
-  refreshing: boolean;
-  onRefresh: () => void;
-}) {
+function Topbar() {
+  const { refreshing, refresh } = useAppContext();
   return (
-    <>
+    <div id="topbar">
       <h1
         id="app-title"
         onDoubleClick={() => {
@@ -471,44 +304,69 @@ function Topbar({
       >
         Inbox Triage
       </h1>
-      <ReactIconButton
+      <IconButton
         icon="refresh"
         title="Refresh"
         pending={refreshing}
-        onClick={onRefresh}
+        onClick={refresh}
       />
-    </>
+    </div>
   );
 }
 
-function SenderRow({
-  group,
-  threads,
-  selected,
-  onSelect,
-  pending,
-  onArchiveAll,
-}: {
-  group: string;
-  threads: any[];
-  selected: boolean;
-  onSelect: () => void;
-  pending: boolean;
-  onArchiveAll: () => void;
-}) {
+function SenderRow({ group, threads }: { group: string; threads: any[] }) {
+  const {
+    selectedGroup,
+    setSelectedGroup,
+    openThreadId,
+    setOpenThreadId,
+    setAllThreads,
+  } = useAppContext();
+  const [pending, setPending] = useState(false);
   const unread = threads.filter((t) => t.isUnread).length;
   const isMailingList = threads.some((t) => t.isMailingList);
   const secondLine = isMailingList ? threads[0].listId : group;
   const { name, othersCount } = senderGroupSummary(threads);
   const archived = threads.every((t) => t.archived);
+
+  function archiveSender() {
+    const toArchive = threads.filter((t) => !t.archived);
+    setPending(true);
+    google.script.run
+      .withSuccessHandler(() => setPending(false))
+      .withFailureHandler((error: Error) => {
+        setPending(false);
+        fail(error);
+      })
+      .archiveThreads(toArchive.map((t) => t.id));
+    const toArchiveIds = new Set(toArchive.map((t) => t.id));
+    setAllThreads((all) =>
+      all.map((t) => (toArchiveIds.has(t.id) ? { ...t, archived: true } : t)),
+    );
+  }
+
   return (
     <div
       className={
         "sender-row" +
-        (selected ? " selected" : "") +
+        (selectedGroup === group ? " selected" : "") +
         (archived ? " archived" : "")
       }
-      onClick={onSelect}
+      onClick={() => {
+        setSelectedGroup(group);
+        // A sender with just one thread has nothing to pick between -- open
+        // it immediately instead of making that a required extra click.
+        // Otherwise, close whatever was open if it's not one of this
+        // sender's threads, so switching senders doesn't leave a stale
+        // thread's messages rendered under the new sender's rows.
+        setOpenThreadId(
+          threads.length === 1
+            ? threads[0].id
+            : threads.some((t) => t.id === openThreadId)
+              ? openThreadId
+              : null,
+        );
+      }}
     >
       <span className="sender-text">
         <span className="sender-display-name">
@@ -522,64 +380,104 @@ function SenderRow({
         <span className="sender-name">{secondLine}</span>
       </span>
       <span className="unread-count">{unread ? String(unread) : ""}</span>
-      <ReactIconButton
+      <IconButton
         icon="archive"
         title="Archive all"
         pending={pending}
-        onClick={onArchiveAll}
+        onClick={archiveSender}
       />
     </div>
   );
 }
 
-function SenderList({
-  selectedGroup,
-  onSelectGroup,
-  archiveSenderPending,
-  onArchiveSender,
-}: {
-  selectedGroup: string | null;
-  onSelectGroup: (group: string) => void;
-  archiveSenderPending: string | null;
-  onArchiveSender: (group: string) => void;
-}) {
+function SenderList() {
+  const { allThreads, selectedGroup, setSelectedGroup } = useAppContext();
   const groups = [...new Set(allThreads.map((t) => t.senderGroup))];
+
+  useEffect(() => {
+    if (selectedGroup && groups.includes(selectedGroup)) return;
+    if (groups.length > 0) setSelectedGroup(groups[0]);
+  }, [groups.join(",")]);
+
+  useEffect(() => {
+    if (!selectedGroup) return;
+    senderPrefetchGeneration++;
+    prefetchSenderMessages(selectedGroup, senderPrefetchGeneration, allThreads);
+  }, [selectedGroup]);
+
   return (
-    <>
+    <div id="senders">
       {groups.map((group) => (
         <SenderRow
           key={group}
           group={group}
           threads={allThreads.filter((t) => t.senderGroup === group)}
-          selected={selectedGroup === group}
-          onSelect={() => onSelectGroup(group)}
-          pending={archiveSenderPending === group}
-          onArchiveAll={() => onArchiveSender(group)}
         />
       ))}
-    </>
+    </div>
   );
 }
 
-function Row({
-  t,
-  hidden,
-  isOpen,
-  onToggleOpen,
-  pendingAction,
-  onArchive,
-  onToggleRead,
-  onToggleStar,
-}: {
-  t: any;
-  hidden: boolean;
-  isOpen: boolean;
-  onToggleOpen: () => void;
-  pendingAction: "archive" | "read" | "star" | null;
-  onArchive: () => void;
-  onToggleRead: () => void;
-  onToggleStar: () => void;
-}) {
+function Row({ t }: { t: any }) {
+  const { selectedGroup, openThreadId, setOpenThreadId, setAllThreads } =
+    useAppContext();
+  const [pendingAction, setPendingAction] = useState<
+    "archive" | "read" | "star" | null
+  >(null);
+  const isOpen = openThreadId === t.id;
+  const hidden = selectedGroup !== null && t.senderGroup !== selectedGroup;
+
+  function archiveOne() {
+    const nowArchived = !t.archived;
+    setPendingAction("archive");
+    google.script.run
+      .withSuccessHandler(() => setPendingAction(null))
+      .withFailureHandler((error: Error) => {
+        setPendingAction(null);
+        fail(error);
+      })
+      .setThreadArchived(t.id, nowArchived);
+    setAllThreads((all) =>
+      all.map((row) =>
+        row.id === t.id ? { ...row, archived: nowArchived } : row,
+      ),
+    );
+  }
+
+  function toggleThreadRead() {
+    const nowRead = t.isUnread;
+    setPendingAction("read");
+    google.script.run
+      .withSuccessHandler(() => setPendingAction(null))
+      .withFailureHandler((error: Error) => {
+        setPendingAction(null);
+        fail(error);
+      })
+      .markThreadRead(t.id, nowRead);
+    setAllThreads((all) =>
+      all.map((row) =>
+        row.id === t.id ? { ...row, isUnread: !nowRead } : row,
+      ),
+    );
+  }
+
+  function toggleThreadStarred() {
+    const nowStarred = !t.isStarred;
+    setPendingAction("star");
+    google.script.run
+      .withSuccessHandler(() => setPendingAction(null))
+      .withFailureHandler((error: Error) => {
+        setPendingAction(null);
+        fail(error);
+      })
+      .setThreadStarred(t.id, nowStarred);
+    setAllThreads((all) =>
+      all.map((row) =>
+        row.id === t.id ? { ...row, isStarred: nowStarred } : row,
+      ),
+    );
+  }
+
   return (
     <>
       <div
@@ -591,7 +489,7 @@ function Row({
         }
         data-sender-group={t.senderGroup}
         data-thread-id={t.id}
-        onClick={onToggleOpen}
+        onClick={() => setOpenThreadId(isOpen ? null : t.id)}
       >
         <span className="cell subject">{t.subject}</span>
         <span className="cell date">
@@ -604,23 +502,23 @@ function Row({
         </span>
         <span className="cell count">{String(t.messageCount)}</span>
         <span className="cell actions">
-          <ReactIconButton
+          <IconButton
             icon={t.archived ? "unarchive" : "archive"}
             title="Archive"
             pending={pendingAction === "archive"}
-            onClick={onArchive}
+            onClick={archiveOne}
           />
-          <ReactIconButton
+          <IconButton
             icon={t.isUnread ? "unread" : "read"}
             title="Toggle read"
             pending={pendingAction === "read"}
-            onClick={onToggleRead}
+            onClick={toggleThreadRead}
           />
-          <ReactIconButton
+          <IconButton
             icon={t.isStarred ? "star" : "unstar"}
             title="Toggle star"
             pending={pendingAction === "star"}
-            onClick={onToggleStar}
+            onClick={toggleThreadStarred}
           />
         </span>
       </div>
@@ -630,28 +528,56 @@ function Row({
 }
 
 function ThreadRows() {
+  const {
+    allThreads,
+    reachedEndOfInbox,
+    loadingMore,
+    setLoadingMore,
+    setAllThreads,
+    setReachedEndOfInbox,
+  } = useAppContext();
+  const mainRef = useRef<HTMLDivElement>(null);
+
+  const maybeLoadMore = useCallback(() => {
+    if (loadingMore || reachedEndOfInbox) return;
+    const main = mainRef.current;
+    if (!main) return;
+    if (main.scrollTop + main.clientHeight < main.scrollHeight - 200) return;
+    setLoadingMore(true);
+    google.script.run
+      .withSuccessHandler((threads: any[]) => {
+        setLoadingMore(false);
+        setReachedEndOfInbox(threads.length < PAGE_SIZE);
+        setAllThreads((all) => {
+          const seen = new Set(all.map((t) => t.id));
+          return all.concat(threads.filter((t) => !seen.has(t.id)));
+        });
+      })
+      .withFailureHandler((error: Error) => {
+        setLoadingMore(false);
+        fail(error);
+      })
+      .listInboxThreads(allThreads.length);
+  }, [loadingMore, reachedEndOfInbox, allThreads.length]);
+
+  useEffect(maybeLoadMore, [maybeLoadMore, allThreads]);
+
   return (
-    <>
-      {allThreads.map((t) => (
-        <Row
-          key={t.id}
-          t={t}
-          hidden={
-            selectedSenderGroup !== null &&
-            t.senderGroup !== selectedSenderGroup
-          }
-          isOpen={openThreadId === t.id}
-          onToggleOpen={() => {
-            openThreadId = openThreadId === t.id ? null : t.id;
-            renderThreadRows();
-          }}
-          pendingAction={rowPendingAction[t.id] ?? null}
-          onArchive={() => archiveOne(t.id)}
-          onToggleRead={() => toggleThreadRead(t.id)}
-          onToggleStar={() => toggleThreadStarred(t.id)}
-        />
-      ))}
-    </>
+    <div id="main" ref={mainRef} onScroll={maybeLoadMore}>
+      <div id="threads" hidden={allThreads.length === 0}>
+        <div className="header">
+          <span>Subject</span>
+          <span>Date</span>
+          <span>#</span>
+          <span></span>
+        </div>
+        <div className="rows">
+          {allThreads.map((t) => (
+            <Row key={t.id} t={t} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -729,3 +655,17 @@ function Messages({ threadId }: { threadId: string }) {
     </div>
   );
 }
+
+function App() {
+  return (
+    <AppProvider>
+      <Topbar />
+      <div id="body">
+        <SenderList />
+        <ThreadRows />
+      </div>
+    </AppProvider>
+  );
+}
+
+createRoot(document.getElementById("app")!).render(<App />);
