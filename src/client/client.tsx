@@ -34,6 +34,10 @@ const ICONS = {
   star: '<svg viewBox="0 0 16 16"><path d="M8 2l1.8 3.9 4.2.5-3.1 3 .8 4.3L8 11.6 4.3 13.7l.8-4.3-3.1-3 4.2-.5z" fill="currentColor"/></svg>',
   unstar:
     '<svg viewBox="0 0 16 16"><path d="M8 2l1.8 3.9 4.2.5-3.1 3 .8 4.3L8 11.6 4.3 13.7l.8-4.3-3.1-3 4.2-.5z" fill="none" stroke="currentColor"/></svg>',
+  checked:
+    '<svg viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+  unchecked:
+    '<svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2" fill="none" stroke="currentColor"/></svg>',
 };
 
 const PAGE_SIZE = 50;
@@ -51,6 +55,8 @@ interface AppState {
   openThreadId: string | null;
   setOpenThreadId: (threadId: string | null) => void;
   refresh: () => void;
+  markReadOnOpen: boolean;
+  setMarkReadOnOpen: (value: boolean) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -68,6 +74,7 @@ function AppProvider({ children }: { children: React.ReactNode }) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const [markReadOnOpen, setMarkReadOnOpen] = useState(false);
 
   const refresh = useCallback(() => {
     setReachedEndOfInbox(false);
@@ -102,6 +109,8 @@ function AppProvider({ children }: { children: React.ReactNode }) {
         openThreadId,
         setOpenThreadId,
         refresh,
+        markReadOnOpen,
+        setMarkReadOnOpen,
       }}
     >
       {children}
@@ -291,7 +300,8 @@ function IconButton({
 }
 
 function Topbar() {
-  const { refreshing, refresh } = useAppContext();
+  const { refreshing, refresh, markReadOnOpen, setMarkReadOnOpen } =
+    useAppContext();
   return (
     <div id="topbar">
       <h1
@@ -304,6 +314,18 @@ function Topbar() {
       >
         Inbox Triage
       </h1>
+      <button
+        className="toggle-btn"
+        onClick={() => setMarkReadOnOpen(!markReadOnOpen)}
+      >
+        <span
+          className="toggle-btn-icon"
+          dangerouslySetInnerHTML={{
+            __html: ICONS[markReadOnOpen ? "checked" : "unchecked"],
+          }}
+        />
+        Mark Read
+      </button>
       <IconButton
         icon="refresh"
         title="Refresh"
@@ -419,8 +441,13 @@ function SenderList() {
 }
 
 function Row({ t }: { t: any }) {
-  const { selectedGroup, openThreadId, setOpenThreadId, setAllThreads } =
-    useAppContext();
+  const {
+    selectedGroup,
+    openThreadId,
+    setOpenThreadId,
+    setAllThreads,
+    markReadOnOpen,
+  } = useAppContext();
   const [pendingAction, setPendingAction] = useState<
     "archive" | "read" | "star" | null
   >(null);
@@ -458,6 +485,13 @@ function Row({ t }: { t: any }) {
       all.map((row) =>
         row.id === t.id ? { ...row, isUnread: !nowRead } : row,
       ),
+    );
+  }
+
+  function markAsReadSilently() {
+    google.script.run.withFailureHandler(fail).markThreadRead(t.id, true);
+    setAllThreads((all) =>
+      all.map((row) => (row.id === t.id ? { ...row, isUnread: false } : row)),
     );
   }
 
@@ -522,7 +556,14 @@ function Row({ t }: { t: any }) {
           />
         </span>
       </div>
-      {isOpen ? <Messages threadId={t.id} /> : null}
+      {isOpen ? (
+        <Messages
+          threadId={t.id}
+          onLoaded={() => {
+            if (markReadOnOpen && t.isUnread) markAsReadSilently();
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -615,13 +656,26 @@ function Message({ m }: { m: any }) {
   );
 }
 
-function Messages({ threadId }: { threadId: string }) {
+function Messages({
+  threadId,
+  onLoaded,
+}: {
+  threadId: string;
+  onLoaded: () => void;
+}) {
   const [messages, setMessages] = useState<any[] | null>(null);
 
   useEffect(() => {
     setMessages(null);
     fetchThreadMessages(threadId, setMessages);
   }, [threadId]);
+
+  // Only fires while this component is mounted, i.e. while its thread is
+  // still open -- closing the thread before this fires (even if a fetch
+  // that was already in flight resolves afterward) means it never does.
+  useEffect(() => {
+    if (messages !== null) onLoaded();
+  }, [messages]);
 
   if (messages === null) {
     return (
